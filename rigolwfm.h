@@ -199,9 +199,9 @@ inline void RigolWaveform::ReadChannelInfo(int ch, size_t dataLoc, FILE * fin)
     }
     
     channel.scale = scale*1e-6*channel.attenuation;
-    channel.offset = offset/250.0;
+    channel.offset = offset/250.0*channel.attenuation;
     channel.scale2 = scale2*1e-6*channel.attenuation;
-    channel.offset2 = offset2/250.0;
+    channel.offset2 = offset2/250.0*channel.attenuation;
     
     channel.inverted = inverted;
     channel.inverted2 = inverted2;
@@ -211,7 +211,7 @@ inline void RigolWaveform::ReadChannelInfo(int ch, size_t dataLoc, FILE * fin)
     
     channel.data.resize(npoints);
     for(int j = 0; j < npoints; ++j)
-        channel.data[j] = ((125.0 - (float)data[j])/250.0f*channel.scale - channel.offset)*10.0;
+        channel.data[j] = ((125.0 - (float)data[j])/250.0f*channel.scale)*10.0 - channel.offset;
 }
 
 inline std::ostream & operator<<(std::ostream & ostrm, const RigolWaveform & waveform)

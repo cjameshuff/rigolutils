@@ -16,5 +16,4 @@ Known issues with the reader:
 Known issues with the plotter:
 =============================
 
-* No horizontal divs yet
 * No configurable options

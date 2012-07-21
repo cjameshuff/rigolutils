@@ -33,7 +33,7 @@ void PlotChannel(Image & image, std::list<Magick::Drawable> & drawList, int smoo
         for(int k = 0; k < smoothing; ++k)
             y += channel.data[j + k];
         y /= smoothing;
-        vertices.push_back(Coordinate((double)j/npts*width, height - (y - yoff)*yscl));
+        vertices.push_back(Coordinate((double)j/npts*width, height/2 - (y + yoff)*yscl));
     }
     drawList.push_back(DrawablePolyline(vertices));
 }
@@ -76,7 +76,7 @@ void PlotWaveform(const std::string foutPath, const RigolWaveform & wfm)
     tmpwfm.offset = wfm.channels[0].offset;
     tmpwfm.data.resize(wfm.npoints);
     
-    Image image = Image("1024x768", "white");
+    Image image = Image("1024x512", "white");
     
     std::list<Magick::Drawable> drawList;
     drawList.push_back(DrawablePushGraphicContext());
@@ -93,18 +93,15 @@ void PlotWaveform(const std::string foutPath, const RigolWaveform & wfm)
         PlotChannel(image, drawList, smoothing, wfm.channels[1]);
     }
     
-    double trigPos = wfm.tdelay*wfm.fs*image.columns()/wfm.npoints;
-    cout << "trigPos: " << trigPos << endl;
-    
+    // Vertical rules
     // Trigger delay, etc are referenced from the midpoint of the captured waveform
     double midT = wfm.npoints/2.0/wfm.fs;
     double vrule;
+    drawList.push_back(DrawableStrokeColor("#888"));
     for(int j = 1; j < 6; ++j) {
         vrule = wfm.fs*(midT - wfm.tscale*j)*image.columns()/wfm.npoints;
-        drawList.push_back(DrawableStrokeColor("#888"));
         drawList.push_back(DrawableLine(vrule, 0, vrule, image.rows()));
         vrule = wfm.fs*(midT + wfm.tscale*j)*image.columns()/wfm.npoints;
-        drawList.push_back(DrawableStrokeColor("#888"));
         drawList.push_back(DrawableLine(vrule, 0, vrule, image.rows()));
     }
     
@@ -122,6 +119,31 @@ void PlotWaveform(const std::string foutPath, const RigolWaveform & wfm)
     drawList.push_back(DrawableStrokeColor("#990"));
     vrule = wfm.fs*(midT - wfm.tdelay)*image.columns()/wfm.npoints;
     drawList.push_back(DrawableLine(vrule, 0, vrule, image.rows()));
+    
+    // Horizontal rules
+    double hrule;
+    drawList.push_back(DrawableStrokeColor("#888"));
+    for(int j = 1; j < 4; ++j) {
+        hrule = image.rows() - (4 - j)*(image.rows()/8.0);
+        drawList.push_back(DrawableLine(0, hrule, image.columns(), hrule));
+        hrule = image.rows() - (4 + j)*(image.rows()/8.0);
+        drawList.push_back(DrawableLine(0, hrule, image.columns(), hrule));
+    }
+    
+    drawList.push_back(DrawableStrokeWidth(2.0));
+    drawList.push_back(DrawableStrokeColor("#000"));
+    hrule = image.rows() - (4)*(image.rows()/8.0);
+    drawList.push_back(DrawableLine(0, hrule, image.columns(), hrule));
+    hrule = image.rows() - (0)*(image.rows()/8.0);
+    drawList.push_back(DrawableLine(0, hrule, image.columns(), hrule));
+    hrule = image.rows() - (8)*(image.rows()/8.0);
+    drawList.push_back(DrawableLine(0, hrule, image.columns(), hrule));
+    
+    // Trigger position
+    // drawList.push_back(DrawableStrokeWidth(1.0));
+    // drawList.push_back(DrawableStrokeColor("#990"));
+    // vrule = wfm.fs*(midT - wfm.tdelay)*image.columns()/wfm.npoints;
+    // drawList.push_back(DrawableLine(vrule, 0, vrule, image.rows()));
     
 /*        double switchT = 2850;
     double c1C = 100e-6;
