@@ -12,8 +12,3 @@ Known issues with the reader:
 * The first 4 or so data points appear to be garbage.
 * Not all parameters are read. A notable omission is most of the trigger settings.
 
-
-Known issues with the plotter:
-=============================
-
-* No configurable options
