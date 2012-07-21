@@ -83,26 +83,27 @@ void PlotWaveform(const std::string foutPath, const RigolWaveform & wfm)
     drawList.push_back(DrawableViewbox(0, 0, image.columns(), image.rows()));
     
     drawList.push_back(DrawableFillColor(Color()));
-    drawList.push_back(DrawableStrokeWidth(1.0));
-    if(!wfm.channels[0].data.empty()) {
-        drawList.push_back(DrawableStrokeColor("#F00"));
-        PlotChannel(image, drawList, smoothing, wfm.channels[0]);
-    }
-    if(!wfm.channels[1].data.empty()) {
-        drawList.push_back(DrawableStrokeColor("#00F"));
-        PlotChannel(image, drawList, smoothing, wfm.channels[1]);
-    }
     
     // Vertical rules
     // Trigger delay, etc are referenced from the midpoint of the captured waveform
     double midT = wfm.npoints/2.0/wfm.fs;
     double vrule;
-    drawList.push_back(DrawableStrokeColor("#888"));
+    drawList.push_back(DrawableStrokeColor("#444"));
     for(int j = 1; j < 6; ++j) {
         vrule = wfm.fs*(midT - wfm.tscale*j)*image.columns()/wfm.npoints;
         drawList.push_back(DrawableLine(vrule, 0, vrule, image.rows()));
         vrule = wfm.fs*(midT + wfm.tscale*j)*image.columns()/wfm.npoints;
         drawList.push_back(DrawableLine(vrule, 0, vrule, image.rows()));
+    }
+    drawList.push_back(DrawableStrokeWidth(0.5));
+    drawList.push_back(DrawableStrokeColor("#AAA"));
+    for(int j = 1; j < 7; ++j) {
+        for(int k = 1; k < 5; ++k) {
+            vrule = wfm.fs*(midT - wfm.tscale*(j - k/5.0))*image.columns()/wfm.npoints;
+            drawList.push_back(DrawableLine(vrule, 0, vrule, image.rows()));
+            vrule = wfm.fs*(midT + wfm.tscale*(j - k/5.0))*image.columns()/wfm.npoints;
+            drawList.push_back(DrawableLine(vrule, 0, vrule, image.rows()));
+        }
     }
     
     drawList.push_back(DrawableStrokeWidth(2.0));
@@ -122,12 +123,22 @@ void PlotWaveform(const std::string foutPath, const RigolWaveform & wfm)
     
     // Horizontal rules
     double hrule;
-    drawList.push_back(DrawableStrokeColor("#888"));
+    drawList.push_back(DrawableStrokeColor("#444"));
     for(int j = 1; j < 4; ++j) {
         hrule = image.rows() - (4 - j)*(image.rows()/8.0);
         drawList.push_back(DrawableLine(0, hrule, image.columns(), hrule));
         hrule = image.rows() - (4 + j)*(image.rows()/8.0);
         drawList.push_back(DrawableLine(0, hrule, image.columns(), hrule));
+    }
+    drawList.push_back(DrawableStrokeWidth(0.5));
+    drawList.push_back(DrawableStrokeColor("#AAA"));
+    for(int j = 1; j < 5; ++j) {
+        for(int k = 1; k < 5; ++k) {
+            hrule = image.rows() - (4 + k/5.0 - j)*(image.rows()/8.0);
+            drawList.push_back(DrawableLine(0, hrule, image.columns(), hrule));
+            hrule = image.rows() - (4 - k/5.0 + j)*(image.rows()/8.0);
+            drawList.push_back(DrawableLine(0, hrule, image.columns(), hrule));
+        }
     }
     
     drawList.push_back(DrawableStrokeWidth(2.0));
@@ -144,6 +155,17 @@ void PlotWaveform(const std::string foutPath, const RigolWaveform & wfm)
     // drawList.push_back(DrawableStrokeColor("#990"));
     // vrule = wfm.fs*(midT - wfm.tdelay)*image.columns()/wfm.npoints;
     // drawList.push_back(DrawableLine(vrule, 0, vrule, image.rows()));
+    
+    
+    drawList.push_back(DrawableStrokeWidth(1.0));
+    if(!wfm.channels[0].data.empty()) {
+        drawList.push_back(DrawableStrokeColor("#F00"));
+        PlotChannel(image, drawList, smoothing, wfm.channels[0]);
+    }
+    if(!wfm.channels[1].data.empty()) {
+        drawList.push_back(DrawableStrokeColor("#00F"));
+        PlotChannel(image, drawList, smoothing, wfm.channels[1]);
+    }
     
 /*        double switchT = 2850;
     double c1C = 100e-6;
