@@ -19,57 +19,36 @@ using namespace std;
 using namespace rigwfm;
 using namespace Magick;
 
+// Ternary value type
+// 0: false, 1: true, -1: neither (undefined boolean value)
+typedef int8_t tern_t;
+
+const tern_t unknown = -1;
+
+
 struct PlotOpts {
     int smoothing;
     double startT, endT;// start and end time referenced from start, in sample periods
+    tern_t ch1enab;
+    tern_t ch2enab;
     
     PlotOpts():
         smoothing(1),
         startT(DBL_MIN),
-        endT(DBL_MAX)
+        endT(DBL_MAX),
+        ch1enab(unknown),
+        ch2enab(unknown)
     {}
 };
 
 
 // Plot waveform as DrawablePolyline
 // smoothing: n consecutive points are averaged together to do a simple low pass filter
-void PlotChannel(Image & image, std::list<Magick::Drawable> & drawList, const PlotOpts & opts, const RigolData & channel)
-{
-    double width = image.columns(), height = image.rows();
-    
-    double startT = (opts.startT != DBL_MIN)? opts.startT : 0.0;
-    double endT = (opts.endT != DBL_MAX)? opts.endT : channel.data.size();
-    
-    std::list<Coordinate> vertices;
-    double yscl = height/8.0/channel.scale;
-    double yoff = channel.offset;
-    size_t npts = endT - startT;
-    cout << "startT: " << startT << endl;
-    cout << "endT: " << endT << endl;
-    cout << "npts: " << npts << endl;
-    if(width >= npts)
-    {
-        double dx = (double)npts/width;
-        for(int j = 0; j < width; ++j) {
-            double y = SincReconstruct(channel.data, (float)j*dx + startT, 64);
-            vertices.push_back(Coordinate(j, height/2 - (y + yoff)*yscl));
-        }
-    }
-    else
-    {
-        for(int j = std::max(0, (int)floor(startT)); (j + opts.smoothing) <= channel.data.size(); j += opts.smoothing) {
-            double y = 0;
-            for(int k = 0; k < opts.smoothing; ++k)
-                y += channel.data[j + k];
-            y /= opts.smoothing;
-            vertices.push_back(Coordinate(((double)j - startT)/npts*width, height/2 - (y + yoff)*yscl));
-        }
-    }
-    cout << "vertices.size(): " << vertices.size() << endl;
-    drawList.push_back(DrawablePolyline(vertices));
-}
+void PlotChannel(Image & image, std::list<Magick::Drawable> & drawList, const PlotOpts & opts, const RigolData & channel);
+void PlotWaveform(const std::string foutPath, const PlotOpts & opts, const RigolWaveform & wfm);
+void PlotGrid(Image & image, std::list<Magick::Drawable> & drawList, const PlotOpts & opts, const RigolWaveform & wfm);
 
-void PlotWaveform(const std::string foutPath, const RigolWaveform & wfm);
+void ParseOpts(PlotOpts & opts, int argc, const char * argv[]);
 
 int main(int argc, const char * argv[])
 {
@@ -82,9 +61,18 @@ int main(int argc, const char * argv[])
     InitializeMagick(*argv);
     
     try {
+        PlotOpts opts;
+        opts.smoothing = 4;
+        
+        ParseOpts(opts, argc, argv);
+        
         RigolWaveform waveform(argv[1]);
         cout << waveform << endl;
-        PlotWaveform(argv[2], waveform);
+        
+        if(opts.ch1enab == unknown) opts.ch1enab = !waveform.channels[0].data.empty();
+        if(opts.ch2enab == unknown) opts.ch1enab = !waveform.channels[1].data.empty();
+        
+        PlotWaveform(argv[2], opts, waveform);
     }
     catch(exception & err)
     {
@@ -95,13 +83,14 @@ int main(int argc, const char * argv[])
     return EXIT_SUCCESS;
 }
 
-
-
-void PlotWaveform(const std::string foutPath, const RigolWaveform & wfm)
+void ParseOpts(PlotOpts & opts, int argc, const char * argv[])
 {
-    PlotOpts opts;
-    opts.smoothing = 4;
     
+}
+
+
+void PlotWaveform(const std::string foutPath, const PlotOpts & opts, const RigolWaveform & wfm)
+{
     // Image image = Image("1024x512", "white");
     Image image = Image("2048x512", "white");
     
@@ -111,6 +100,34 @@ void PlotWaveform(const std::string foutPath, const RigolWaveform & wfm)
     
     drawList.push_back(DrawableFillColor(Color()));
     
+    PlotGrid(image, drawList, opts, wfm);
+    
+    drawList.push_back(DrawableStrokeWidth(1.0));
+    if(opts.ch1enab) {
+        drawList.push_back(DrawableStrokeColor("#F00"));
+        PlotChannel(image, drawList, opts, wfm.channels[0]);
+    }
+    if(opts.ch1enab) {
+        drawList.push_back(DrawableStrokeColor("#00F"));
+        PlotChannel(image, drawList, opts, wfm.channels[1]);
+    }
+    
+    // opts.startT = wfm.npoints/2.0 - 6*50e-6*wfm.fs;
+    // opts.endT = wfm.npoints/2.0 - 5*50e-6*wfm.fs;;
+    // // opts.startT = wfm.npoints/2.0 - 6*5e-3*wfm.fs;
+    // // opts.endT = wfm.npoints/2.0 + 0;
+    // // opts.endT = wfm.npoints/2.0 + 6*5e-3*wfm.fs;
+    // drawList.push_back(DrawableStrokeColor("#0B0"));
+    // PlotChannel(image, drawList, opts, wfm.channels[0]);
+    
+    drawList.push_back(DrawablePopGraphicContext());
+    
+    image.draw(drawList);
+    image.write(std::string(foutPath));
+}
+
+void PlotGrid(Image & image, std::list<Magick::Drawable> & drawList, const PlotOpts & opts, const RigolWaveform & wfm)
+{
     // Vertical rules
     // Trigger delay, etc are referenced from the midpoint of the captured waveform
     double midT = wfm.npoints/2.0/wfm.fs;
@@ -176,64 +193,37 @@ void PlotWaveform(const std::string foutPath, const RigolWaveform & wfm)
     drawList.push_back(DrawableLine(0, hrule, image.columns(), hrule));
     hrule = image.rows() - (8)*(image.rows()/8.0);
     drawList.push_back(DrawableLine(0, hrule, image.columns(), hrule));
-    
-    drawList.push_back(DrawableStrokeWidth(1.0));
-    if(!wfm.channels[0].data.empty()) {
-        drawList.push_back(DrawableStrokeColor("#F00"));
-        PlotChannel(image, drawList, opts, wfm.channels[0]);
-    }
-    if(!wfm.channels[1].data.empty()) {
-        drawList.push_back(DrawableStrokeColor("#00F"));
-        PlotChannel(image, drawList, opts, wfm.channels[1]);
-    }
-    
-    opts.startT = wfm.npoints/2.0 - 6*50e-6*wfm.fs;
-    opts.endT = wfm.npoints/2.0 - 5*50e-6*wfm.fs;;
-    // opts.startT = wfm.npoints/2.0 - 6*5e-3*wfm.fs;
-    // opts.endT = wfm.npoints/2.0 + 0;
-    // opts.endT = wfm.npoints/2.0 + 6*5e-3*wfm.fs;
-    cout << "opts.startT: " << opts.startT << endl;
-    cout << "opts.endT: " << opts.endT << endl;
-    drawList.push_back(DrawableStrokeColor("#0B0"));
-    PlotChannel(image, drawList, opts, wfm.channels[0]);
-    
-    // tmpwfm.data.resize(wfm.npoints);
-/*        double switchT = 2850;
-    double c1C = 100e-6;
-    double c2C = 470e-6;
-    double c1v = 0;
-    double c2v = 6.2;
-    double r1r = 0.1;
-    double L = 5e-6;
-    double current = 0;
-    double tstep = 1.0/waveform.fs;
-    for(int j = 0; j < waveform.npoints; ++j)
-    {
-        if(j < switchT)
-            tmpwfm.data[j] = 0.0;
-        else {
-            tmpwfm.data[j] = 6.2 - c2v;
-            double vdrop = r1r*current;
-            current += (c1v - c2v - vdrop)/L*tstep;
-            double c = current*tstep;
-            c1v -= c/c1C;
-            c2v += c/c2C;
-        }
-    }*/
-    // for(int j = 0; j < waveform.npoints; ++j)
-    // {
-    //     double v = 5.14*exp(-(j - switchT)/waveform.fs/(0.4*1.0/(1.0/470e-6 + 1.0/100e-6))) + 1.06;
-    //     if(j < switchT)
-    //         tmpwfm.data[j] = 6.2;
-    //     else
-    //         // tmpwfm.data[j] = waveform.channels[0].data[j] - v + 3;
-    //         tmpwfm.data[j] = v;
-    // }
-    // drawList.push_back(DrawableStrokeColor("#990"));
-    // PlotChannel(image, drawList, tmpwfm);
-    
-    drawList.push_back(DrawablePopGraphicContext());
-    
-    image.draw(drawList);
-    image.write(std::string(foutPath));
 }
+
+void PlotChannel(Image & image, std::list<Magick::Drawable> & drawList, const PlotOpts & opts, const RigolData & channel)
+{
+    double width = image.columns(), height = image.rows();
+    
+    double startT = (opts.startT != DBL_MIN)? opts.startT : 0.0;
+    double endT = (opts.endT != DBL_MAX)? opts.endT : channel.data.size();
+    
+    std::list<Coordinate> vertices;
+    double yscl = height/8.0/channel.scale;
+    double yoff = channel.offset;
+    size_t npts = endT - startT;
+    if(width >= npts)
+    {
+        double dx = (double)npts/width;
+        for(int j = 0; j < width; ++j) {
+            double y = SincReconstruct(channel.data, (float)j*dx + startT, 64);
+            vertices.push_back(Coordinate(j, height/2 - (y + yoff)*yscl));
+        }
+    }
+    else
+    {
+        for(int j = std::max(0, (int)floor(startT)); (j + opts.smoothing) <= channel.data.size(); j += opts.smoothing) {
+            double y = 0;
+            for(int k = 0; k < opts.smoothing; ++k)
+                y += channel.data[j + k];
+            y /= opts.smoothing;
+            vertices.push_back(Coordinate(((double)j - startT)/npts*width, height/2 - (y + yoff)*yscl));
+        }
+    }
+    drawList.push_back(DrawablePolyline(vertices));
+}
+
