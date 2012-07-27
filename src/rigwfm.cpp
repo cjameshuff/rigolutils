@@ -11,6 +11,7 @@
 #include <cmath>
 #include <cfloat>
 
+#include <unistd.h>
 #include <Magick++.h>
 
 #include "rigolwfm.h"
@@ -83,9 +84,37 @@ int main(int argc, const char * argv[])
     return EXIT_SUCCESS;
 }
 
+static const char * optString = "Il:o:vh?";
+static const struct option longOpts[] = {
+    {"plot", no_argument, NULL, 'p'},
+    {"smoothing",  required_argument, NULL, 0},
+    {"tstart",  required_argument, NULL, 0},
+    {"tend",    required_argument, NULL, 0},
+    {"tcenter", required_argument, NULL, 0},
+    {"file", required_argument, NULL, 'f'},
+    {NULL, 0, NULL, 0}
+};
 void ParseOpts(PlotOpts & opts, int argc, const char * argv[])
 {
-    
+    int renderPlot = 0;
+    int opt, optInd = 0;
+    do {
+        opt = getopt_long(argc, argv, optString, longOpts, &optInd);
+        // optarg, optind, optopt
+        switch(opt) {
+            case p:
+            break;
+            
+            case 0:
+                if(strcmp("randomize", longOpts[longIndex].name) == 0) {
+                    globalArgs.randomized = 1;
+                }
+            break
+            
+            case -1:
+            break;
+        }
+    } while(opt != -1);
 }
 
 
