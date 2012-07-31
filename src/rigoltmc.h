@@ -37,8 +37,13 @@ class DS1000E: public TMC_Device {
         TMC_Device::Read(resp, maxSize);
     }
     
+    
+    double SampleRateDigital() {return FloatQuery(":ACQ:SAMP? DIGITAL");}
+    double SampleRate(int channel) {return FloatQuery(":ACQ:SAMP? CHAN%c", '1' + channel);}
+    
     double ChanScale(int channel) {return FloatQuery(":CHAN%c:SCAL?", '1' + channel);}
     double ChanOffset(int channel) {return FloatQuery(":CHAN%c:OFFS?", '1' + channel);}
+    
     double TimeScale() {return FloatQuery(":TIM:SCAL?");}
     double TimeOffset() {return FloatQuery(":TIM:OFFS?");}
     

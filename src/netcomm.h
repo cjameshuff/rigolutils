@@ -219,6 +219,8 @@ class Host {
     }
     ~Host() {if(listenfd != -1) close(listenfd);}
     
+    void Close() {if(listenfd != -1) close(listenfd); listenfd = -1;}
+    
     Socket * Accept()
     {
         struct sockaddr_storage other_addr;

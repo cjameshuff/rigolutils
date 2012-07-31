@@ -1,14 +1,20 @@
 
-Currently, only single device access (cmd 1) is implemented, connecting automatically to the first device found and putting it in slot 0.
+Currently, only simple device connection and access is implemented
 
-Each connection is to one specific device. The server spawns a subprocess for each connection, allowing simultaneous access to multiple devices as hardware permits. However, only one connection is permitted to each device.
+Each connection is to one specific device. The server spawns a subprocess for each connection, allowing simultaneous access to multiple devices (including such things as simultaneously downloading waveforms from multiple devices) as hardware permits. However, only one connection is permitted to each device.
 
-Once a connection to the server is established, a ConnectToDevice command must be issued.
+Once a connection to the server is established, a ConnectToDevice command must be issued. DeviceAccess commands can then be issued to perform reads and writes to the device. The connection will be dropped if no commands are received for a given amount of time.
 
+TODO:
+
+* spawn the subprocess after the ConnectToDevice command rather than immediately after connection, allowing the server to track device connections?
+* implement other commands
+* allow server to be configured to broadcast the result of a given query periodically, to allow multiple users without overloading the device?
 
 
 ## Packet format:
 
+All values in network byte order
 Command: 12 byte header followed by variable amount of data
 
 	uint cmd:8
@@ -35,32 +41,22 @@ If KeepAlive is not set to 0, connections will be dropped after KeepAlive second
 
 ### SetKeepAlive (cmd = 0, cmd2 = 1)
 
+### Disconnect (cmd = 0, cmd2 = 2)
 
-
-
-### ConnectToDevice (cmd = 2, cmd2 = 0)
-
-16 bytes:
+### ListDevices (cmd = 1, cmd2 = 0)
 
 	uint cmd:8 = 2
-	uint cmd2:8 = 0
+	uint cmd2:8 = 1
 	uint seqnum:8
 	uint seqnum2:8
-	uint payloadSize:32 = 4
+	uint payloadSize:32
 	uint vendorID:16
 	uint productID:16
-	uint payload:payloadSize
-	uint deviceNum:8
-	uint unused:8
-	uint unused:8
-	uint unused:8
 
-Response is standard ack.
-
-Connects to the deviceNum'th device with given vendor and product IDs.
+List serial numbers of all devices matching vendor ID and product ID.
 
 
-### ConnectToDevice2 (cmd = 2, cmd2 = 1)
+### ConnectToDevice (cmd = 1, cmd2 = 1)
 
 Variable length:
 
@@ -81,21 +77,6 @@ Connects to the first device that responds with the desired serial number.
 If given device ID is 255, an ID from the range 0-254 is assigned and used in the ack.
 
 
-### DisconnectDevice (cmd = 4)
-
-16 bytes:
-
-	uint cmd:8 = 4
-	uint cmd2:8 = device ID, starting at 0x00
-	uint seqnum:8
-	uint seqnum2:8
-	uint payloadSize:32 = 0
-	uint unused:32
-	uint payload:payloadSize
-
-Response is standard ack.
-
-
 ### ResetDevice (cmd = 5)
 
 16 bytes:
@@ -111,9 +92,8 @@ Response is standard ack.
 Response is standard ack.
 
 
-## Device access (cmd = 1, cmd2 = 1)
+## DeviceAccess (cmd = 10, cmd2 = 0)
 
-All values in network byte order
 Command packet:
 
 	cmd: = 0x01

@@ -16,11 +16,14 @@ endif
 
 all: rigolserv rigolscope
 
-rigolserv: src/simple_except.h src/freetmc.h src/netcomm.h obj/freetmc_local.cpp.o obj/rigolserv.cpp.o
+obj:
+	mkdir -p obj
+
+rigolserv: obj src/simple_except.h src/freetmc.h src/netcomm.h obj/freetmc_local.cpp.o obj/rigolserv.cpp.o
 	$(CXX) $(CFLAGS) obj/freetmc_local.cpp.o obj/rigolserv.cpp.o -L/usr/local/lib -lusb-1.0 -o rigolserv
 
-rigolscope: src/simple_except.h src/freetmc.h src/netcomm.h src/remotedevice.h src/rigoltmc.h obj/rigolscope.cpp.o
-	$(CXX) $(CFLAGS) ${OGLFLAGS} `GraphicsMagick++-config --cxxflags --cppflags  --ldflags --libs` obj/rigolscope.cpp.o -o rigolscope
+rigolscope: obj src/simple_except.h src/freetmc.h src/netcomm.h src/remotedevice.h src/rigoltmc.h obj/rigolscope.cpp.o obj/plotting.cpp.o
+	$(CXX) $(CFLAGS) ${OGLFLAGS} `GraphicsMagick++-config --cxxflags --cppflags  --ldflags --libs` obj/rigolscope.cpp.o obj/plotting.cpp.o -o rigolscope
 
 obj/%.cpp.o: src/%.cpp
 	$(CXX) -c $(CFLAGS) $< -o $@

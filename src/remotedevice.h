@@ -16,9 +16,28 @@
 
 class TMC_RemoteDevice: public TMC_Device {
     FramedConnection conn;
+    uint8_t seqNum;
   public:
-    TMC_RemoteDevice(uint16_t vendID, uint16_t prodID, const std::string & sernum, int sockfd): conn(sockfd) {
+    TMC_RemoteDevice(uint16_t vendID, uint16_t prodID, const std::string & sernum, int sockfd):
+        conn(sockfd),
+        seqNum(0)
+    {
         // conn.SetBlocking();
+        std::vector<uint8_t> bfr(sernum.size() + HEADER_SIZE);
+        std::copy(sernum.begin(), sernum.end(), bfr.begin() + HEADER_SIZE);
+        bfr[0] = 1;
+        bfr[1] = 1;
+        bfr[2] = seqNum++;
+        bfr[3] = ~bfr[2];
+        *(uint32_t*)&(bfr)[4] = htonl(sernum.size());
+        *(uint32_t*)&(bfr)[8] = htonl((uint32_t)vendID << 16 | prodID);
+        // *(uint16_t*)&(bfr)[8] = htons(vendID);
+        // *(uint16_t*)&(bfr)[10] = htons(prodID);
+        printf("sending: \n");
+        for(ssize_t j = 0; j < bfr.size(); ++j)
+            printf(" %02X", bfr[j]);
+        printf("\n");
+        conn.SendMessage(&bfr[0], bfr.size());
     }
     virtual ~TMC_RemoteDevice() {}
     
@@ -26,9 +45,9 @@ class TMC_RemoteDevice: public TMC_Device {
     {
         std::vector<uint8_t> bfr(len + HEADER_SIZE);
         std::copy(msg, msg + len, bfr.begin() + HEADER_SIZE);
-        bfr[0] = 0x01;
-        bfr[1] = 0x00;
-        bfr[2] = 0x01;
+        bfr[0] = 10;
+        bfr[1] = 0;
+        bfr[2] = seqNum++;
         bfr[3] = ~bfr[2];
         *(uint32_t*)&(bfr)[4] = htonl(len);
         *(uint32_t*)&(bfr)[8] = 0;
@@ -39,9 +58,9 @@ class TMC_RemoteDevice: public TMC_Device {
     virtual size_t Read(uint8_t * msg, size_t len)
     {
         uint8_t bfr[HEADER_SIZE];
-        bfr[0] = 0x01;
-        bfr[1] = 0x00;
-        bfr[2] = 0x01;
+        bfr[0] = 10;
+        bfr[1] = 0;
+        bfr[2] = seqNum++;
         bfr[3] = ~bfr[2];
         *(uint32_t*)&(bfr)[4] = 0;
         *(uint32_t*)&(bfr)[8] = htonl(len);
