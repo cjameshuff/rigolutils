@@ -46,10 +46,11 @@ struct Socket {
         ssize_t status = recv(sockfd, &buf[0], maxdata, 0);
         if(status >= 0)
             buf.resize(status);
+        return status;
     }
     // flags: MSG_OOB, MSG_DONTROUTE
     int Send(const std::vector<uint8_t> & buf, int flags = 0) {
-        ssize_t status = send(sockfd, &buf[0], buf.size(), 0);
+        return send(sockfd, &buf[0], buf.size(), 0);
     }
 };
 
@@ -58,9 +59,10 @@ class FramedConnection {
     std::queue<std::vector<uint8_t> *> buffers;
     std::vector<uint8_t> * currentBuffer;
     bool escaped;
+    bool good;
     
   public:
-      FramedConnection(int s): sockfd(s), currentBuffer(NULL) {SetNonblocking();}
+    FramedConnection(int s): sockfd(s), currentBuffer(NULL), good(true) {SetNonblocking();}
     
     void SetNonblocking()
     {
@@ -75,6 +77,8 @@ class FramedConnection {
         flags &= O_NONBLOCK;
         fcntl(sockfd, F_SETFL, flags);
     }
+    
+    bool Good() const {return good;}
     
     bool Poll()
     {
@@ -99,7 +103,10 @@ class FramedConnection {
                 continue;
             
             if(status < 0)
+            {
+                good = false;
                 throw FormattedError("recv() failed (error %d): %s", errno, strerror(errno));
+            }
             
             for(ssize_t j = 0; j < status; ++j)
             {
