@@ -47,7 +47,7 @@ void DeviceComm(FramedConnection & conn, const std::vector<uint8_t> & msg)
     }
     
     if(writeSize) {
-        // cout << "write: " << string(msg.begin() + HEADER_SIZE, msg.end()) << endl;
+        cout << "write: " << string(msg.begin() + HEADER_SIZE, msg.end()) << endl;
         scope->Write(&msg[HEADER_SIZE], msg.size() - HEADER_SIZE);
     }
     
@@ -62,15 +62,15 @@ void DeviceComm(FramedConnection & conn, const std::vector<uint8_t> & msg)
     *(uint32_t*)&(resp)[4] = htonl(readSize);
     *(uint32_t*)&(resp)[8] = 0;
     
-    // if(readSize > 128)
-    //     printf("long response: %d B\n", (int)(readSize + HEADER_SIZE));
-    // else
-    // {
-    //     printf("response: %d B\n", (int)(readSize + HEADER_SIZE));
-    //     for(ssize_t j = 0; j < readSize + HEADER_SIZE; ++j)
-    //         printf(" %02X", msg[j]);
-    //     printf("\n");
-    // }
+    if(readSize > 128)
+        printf("long response: %d B\n", (int)(readSize + HEADER_SIZE));
+    else
+    {
+        printf("response: %d B\n", (int)(readSize + HEADER_SIZE));
+        for(ssize_t j = 0; j < readSize + HEADER_SIZE; ++j)
+            printf(" %02X", msg[j]);
+        printf("\n");
+    }
     
     if(readSize)
         conn.SendMessage((uint8_t*)&resp[0], readSize + HEADER_SIZE);
@@ -123,7 +123,7 @@ int main(int argc, const char * argv[])
                 cerr << "connection timed out" << endl;
                 break;
             }
-            
+	    
             usleep(1000);
             if(conn.Poll())
             {
@@ -155,19 +155,19 @@ int main(int argc, const char * argv[])
                     uint16_t productID = vidpid & 0xFFFF;
                     // uint16_t vendorID = ntohs(*(uint16_t*)&msg[8]);
                     // uint16_t productID = ntohs(*(uint16_t*)&msg[10]);
-                    // printf("received: \n");
-                    // for(ssize_t j = 0; j < msg->size(); ++j)
-                    //     printf(" %02X", (*msg)[j]);
-                    // printf("\n");
+                    printf("received: \n");
+                    for(ssize_t j = 0; j < msg->size(); ++j)
+                        printf(" %02X", (*msg)[j]);
+                    printf("\n");
                     string sernum(msg->begin() + HEADER_SIZE, msg->begin() + HEADER_SIZE + sernumSize);
-                    // printf("vid: %04X pid: %04X, %s\n", vendorID, productID, sernum.c_str());
-                    // scope = new DS1000E(new TMC_LocalDevice(0x1AB1, 0x0588, sernum));
+                    printf("vid: %04X pid: %04X, %s\n", vendorID, productID, sernum.c_str());
                     if(scope)
                         delete scope;
                     scope = new DS1000E(new TMC_LocalDevice(vendorID, productID, sernum));
                 }
                 else if(cmd == 10 && cmd2 == 0)
                 {
+	  	    printf("devicecomm msg\n");
                     DeviceComm(conn, *msg);
                 }
                 else {
@@ -175,8 +175,8 @@ int main(int argc, const char * argv[])
                 }
                 
                 delete msg;
-            }
-        }
+            } // if(Poll())
+        } // while(1)
     }
     catch(exception & err)
     {
