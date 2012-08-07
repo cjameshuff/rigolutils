@@ -33,10 +33,6 @@ class TMC_RemoteDevice: public TMC_Device {
         *(uint32_t*)&(bfr)[8] = htonl((uint32_t)vendID << 16 | prodID);
         // *(uint16_t*)&(bfr)[8] = htons(vendID);
         // *(uint16_t*)&(bfr)[10] = htons(prodID);
-        printf("sending: \n");
-        for(ssize_t j = 0; j < bfr.size(); ++j)
-            printf(" %02X", bfr[j]);
-        printf("\n");
         conn.SendMessage(&bfr[0], bfr.size());
     }
     virtual ~TMC_RemoteDevice() {}

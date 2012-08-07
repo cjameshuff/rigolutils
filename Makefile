@@ -14,7 +14,7 @@ else
 endif
 
 
-all: rigolserv rigolscope
+all: rigolserv rigolscope scopecmd
 
 obj:
 	mkdir -p obj
@@ -22,8 +22,11 @@ obj:
 rigolserv: obj src/simple_except.h src/freetmc.h src/netcomm.h obj/freetmc_local.cpp.o obj/rigolserv.cpp.o
 	$(CXX) $(CFLAGS) obj/freetmc_local.cpp.o obj/rigolserv.cpp.o -L/usr/local/lib -lusb-1.0 -o rigolserv
 
-rigolscope: obj src/simple_except.h src/freetmc.h src/netcomm.h src/remotedevice.h src/rigoltmc.h obj/rigolscope.cpp.o obj/plotting.cpp.o
-	$(CXX) $(CFLAGS) ${OGLFLAGS} `GraphicsMagick++-config --cxxflags --cppflags  --ldflags --libs` obj/rigolscope.cpp.o obj/plotting.cpp.o -o rigolscope
+scopev: obj src/simple_except.h src/freetmc.h src/netcomm.h src/remotedevice.h src/rigoltmc.h obj/rigolscope.cpp.o obj/plotting.cpp.o
+	$(CXX) $(CFLAGS) ${OGLFLAGS} `GraphicsMagick++-config --cxxflags --cppflags  --ldflags --libs` obj/rigolscope.cpp.o obj/plotting.cpp.o -o scopev
+
+scopecmd: obj src/simple_except.h src/freetmc.h src/netcomm.h src/remotedevice.h src/rigoltmc.h obj/scopecmd.cpp.o obj/plotting.cpp.o
+	$(CXX) $(CFLAGS) obj/scopecmd.cpp.o -o scopecmd
 
 obj/%.cpp.o: src/%.cpp
 	$(CXX) -c $(CFLAGS) $< -o $@
