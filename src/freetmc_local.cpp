@@ -89,6 +89,12 @@ TMC_Descriptor * OpenTMC_LocalDevice(libusb_device * dev, struct libusb_device_d
     // desc->isRigol = false;
     desc->isRigol = (devdesc.idVendor == 0x1AB1);
     
+    fprintf(stderr, "libusb_open:\n");
+    r = libusb_open(dev, &(desc->hand));
+    if(r < 0)
+        throw FormattedError("libusb_open() failed");
+    
+    fprintf(stderr, "libusb_get_config_descriptor:\n");
     struct libusb_config_descriptor * cfg;
     libusb_get_config_descriptor(dev, 0, &cfg);
     
@@ -100,26 +106,27 @@ TMC_Descriptor * OpenTMC_LocalDevice(libusb_device * dev, struct libusb_device_d
     desc->maxPacketSizeOUT = epOUT->wMaxPacketSize;
     desc->maxPacketSizeIN = epIN->wMaxPacketSize;
     
-    r = libusb_open(dev, &(desc->hand));
+    fprintf(stderr, "libusb_set_configuration:\n");
+    r = libusb_set_configuration(desc->hand, 1);
     if(r < 0)
-        throw FormattedError("libusb_open() failed");
+        throw FormattedError("libusb_set_configuration() failed (%d)", r);
     
-    r = libusb_set_configuration(desc->hand, 0);
-    if(r < 0)
-        throw FormattedError("libusb_set_configuration() failed");
-    
+    fprintf(stderr, "libusb_claim_interface:\n");
     r = libusb_claim_interface(desc->hand, 0);
     if(r < 0)
-        throw FormattedError("libusb_claim_interface() failed");
+        throw FormattedError("libusb_claim_interface() failed (%d)", r);
     
+    fprintf(stderr, "libusb_clear_halt IN:\n");
     r = libusb_clear_halt(desc->hand, BULK_ENDPOINT_IN);
     if(r < 0)
-        throw FormattedError("libusb_clear_halt() failed on IN bulk endpoint");
+        throw FormattedError("libusb_clear_halt() failed on IN bulk endpoint (%d)", r);
     
+    fprintf(stderr, "libusb_clear_halt OUT:\n");
     r = libusb_clear_halt(desc->hand, BULK_ENDPOINT_OUT);
     if(r < 0)
-        throw FormattedError("libusb_clear_halt() failed on OUT bulk endpoint");
+        throw FormattedError("libusb_clear_halt() failed on OUT bulk endpoint (%d)", r);
     
+    fprintf(stderr, "Device opened and initialized\n");
     return desc;
 }
 
@@ -134,13 +141,13 @@ TMC_LocalDevice::TMC_LocalDevice(uint16_t vendID, uint16_t prodID, const std::st
     }
     ++NumTMC_LocalDevices;
     
+    printf("searching for matching device\n");
+    
     libusb_device ** devs;
     ssize_t cnt = libusb_get_device_list(NULL, &devs);
     if(cnt < 0)
         throw FormattedError("libusb_get_device_list() failed");
     
-    // Opens first match found
-    // TODO: support multiple devices
     for(libusb_device ** dev = devs; *dev != NULL; dev++)
     {
         struct libusb_device_descriptor devdesc;
@@ -148,13 +155,20 @@ TMC_LocalDevice::TMC_LocalDevice(uint16_t vendID, uint16_t prodID, const std::st
         if(r < 0)
             throw FormattedError("failed to get device descriptor");
         
+	fprintf(stderr, "%04x:%04x (bus %d, device %d)\n",
+	       devdesc.idVendor, devdesc.idProduct,
+	       libusb_get_bus_number(*dev), libusb_get_device_address(*dev));
+	
         if(devdesc.idVendor == vendID && devdesc.idProduct == prodID)
         {
+	    fprintf(stderr, "Found VID/PID match\n");
             // Vendor and product ID match, install descriptor and check ID
             desc = OpenTMC_LocalDevice(*dev, devdesc);
+	    fprintf(stderr, "Device opened\n");
             if(sernum == "")
                 break;// take first found
             else {
+		fprintf(stderr, "Sending Identify\n");
                 IDN_Response ident = Identify();
                 if(ident.serial == sernum)
                     break;
