@@ -9,6 +9,8 @@
 #include <exception>
 
 #include <cstdarg>
+//#include <cstdint>
+#include <stdint.h>
 
 #include "simple_except.h"
 
