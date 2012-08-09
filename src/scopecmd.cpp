@@ -126,6 +126,11 @@ Command commands[] = {
     // Other commands
     
     // scopecmd commands
+    
+    // Contrary to the documention, the enable/disable is for the lock, not the buttons
+    {"lock", ":KEY:LOCK ENAB", 0, NULL, "Lock panel buttons"},
+    {"unlock", ":KEY:LOCK DIS", 0, NULL, "Unlock panel buttons"},
+    
     {"get-scope-params", "", 0, GET_SCOPE_PARAMS, "Get scope parameters in human readable, easily parsable format"},
     {"w", "<VARIES>", 0, WRITE, "Write raw command to scope"},
     {"r", "<NONE>", 0, READ, "Read raw data from scope"},
