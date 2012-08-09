@@ -8,9 +8,13 @@ Oscilloscope access is implemented via a generic server which handles direct com
 Components
 =====
 
-* rigolserv: Server, handles direct communication to oscilloscopes
+* scopeserv: Server, handles direct communication to oscilloscopes
 * scopecmd: send commands to oscilloscopes via the command line, download waveform data
-* oscv: plot waveform data, generate an image file or display on screen
+	* Examples:
+		* `scopecmd idn` - get identity string for first scope found on USB
+		* `scopecmd -u 192.168.0.21 get-scope-params` - Get a dump of all scope parameters from a remote scope
+		* `scopecmd -s DS1EB104702974 rst` - Reset parameters on a specific scope attached via USB.
+* scopev: plot waveform data, generate an image file or display on screen
 
 
 
@@ -39,12 +43,13 @@ Client:
 
 Utilities:
 
+* scopecmd allows basic command-line access to oscilloscopes
 * Code exists for pulling data out of the oscilloscope and generating simple plots. Code needs to be cleaned up and turned into some usable tools:
 	* waveform plotting
 	* data acquisition
 	* interactive scope control and real-time viewing
 * Code exists for reading most data from a .wfm waveform file. Again, need to make tools using it.
-* Oscilloscope commands need to be filled out.
+
 
 Other:
 

@@ -178,9 +178,6 @@ int main(int argc, char ** argv)
         // cerr << "\t--list: List recognized local scopes" << endl;
         // cerr << "\t--list-remote: List recognized remote scopes" << endl;
         cerr << "" << endl;
-        cerr << "A raw write is always done first if requested, followed by a raw read, again if requested. Any short commands are then executed in the order given." << endl;
-        // cerr << "If a waveform output path is specified, captures are written in the specified format, numbered by channel and sequence number." << endl;
-        cerr << "" << endl;
         cerr << "\tWaveform length: normal (600 pts), raw (8K-16K pts), long (512K-1M pts)." << endl;
         cerr << "COMMANDS:" << endl;
         size_t longest = 0;
