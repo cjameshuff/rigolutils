@@ -113,7 +113,7 @@ class TMC_Device {
     // Standard queries
     IDN_Response Identify() {
         std::string resp = Query("*IDN?");
-        std::cout << "IDN: " << resp << std::endl;
+        // std::cout << "IDN: " << resp << std::endl;
         IDN_Response idn;
         size_t start = 0, end = resp.find_first_of(',');
         idn.manufacturer = resp.substr(start, end - start);

@@ -118,10 +118,10 @@ class FramedConnection {
                     }
                     else if(tmpbuf[j] == 0xFD) {// break frame
                         buffers.push(currentBuffer);
-                        printf("received: \n");
-                        for(ssize_t j = 0; j < currentBuffer->size(); ++j)
-                            printf(" %02X", (*currentBuffer)[j]);
-                        printf("\n");
+                        // printf("received: \n");
+                        // for(ssize_t j = 0; j < currentBuffer->size(); ++j)
+                        //     printf(" %02X", (*currentBuffer)[j]);
+                        // printf("\n");
                         currentBuffer = new std::vector<uint8_t>;
                     }
                     escaped = false;
@@ -157,10 +157,10 @@ class FramedConnection {
     void SendMessage(uint8_t bfr[], size_t len)
     {
         std::vector<uint8_t> outbfr(len*2);
-        printf("sending: \n");
-        for(ssize_t j = 0; j < len; ++j)
-            printf(" %02X", bfr[j]);
-        printf("\n");
+        // printf("sending: \n");
+        // for(ssize_t j = 0; j < len; ++j)
+        //     printf(" %02X", bfr[j]);
+        // printf("\n");
         int k = 0;
         for(int j = 0; j < len; ++j)
         {

@@ -70,8 +70,8 @@ struct TMC_Descriptor {
     uint16_t maxPacketSizeOUT;
     uint16_t maxPacketSizeIN;
     
-    TMC_Descriptor():
-        hand(NULL),
+    TMC_Descriptor(libusb_device_handle * h):
+        hand(h),
         isRigol(false),
         bTag(1),
         maxPacketSizeOUT(0),
@@ -82,17 +82,12 @@ struct TMC_Descriptor {
 
 
 
-TMC_Descriptor * OpenTMC_LocalDevice(libusb_device * dev, struct libusb_device_descriptor & devdesc)
+TMC_Descriptor * OpenTMC_LocalDevice(libusb_device * dev, libusb_device_handle * hand, struct libusb_device_descriptor & devdesc)
 {
     int r;
-    TMC_Descriptor * desc = new TMC_Descriptor;
+    TMC_Descriptor * desc = new TMC_Descriptor(hand);
     // desc->isRigol = false;
     desc->isRigol = (devdesc.idVendor == 0x1AB1);
-    
-    fprintf(stderr, "libusb_open:\n");
-    r = libusb_open(dev, &(desc->hand));
-    if(r < 0)
-        throw FormattedError("libusb_open() failed");
     
     fprintf(stderr, "libusb_get_config_descriptor:\n");
     struct libusb_config_descriptor * cfg;
@@ -131,11 +126,15 @@ TMC_Descriptor * OpenTMC_LocalDevice(libusb_device * dev, struct libusb_device_d
 }
 
 
-TMC_LocalDevice::TMC_LocalDevice(uint16_t vendID, uint16_t prodID, const std::string & sn): desc(NULL), sernum(sn)
+TMC_LocalDevice::TMC_LocalDevice(uint16_t vendID, uint16_t prodID, const std::string & sn):
+    desc(NULL),
+    sernum(sn)
 {
+    int r;
+    
     if(NumTMC_LocalDevices == 0)
     {
-        int r = libusb_init(NULL);
+        r = libusb_init(NULL);
         if(r < 0)
             throw FormattedError("libusb_init() failed");
     }
@@ -148,37 +147,45 @@ TMC_LocalDevice::TMC_LocalDevice(uint16_t vendID, uint16_t prodID, const std::st
     if(cnt < 0)
         throw FormattedError("libusb_get_device_list() failed");
     
-    for(libusb_device ** dev = devs; *dev != NULL; dev++)
+    desc = NULL;
+    for(libusb_device ** dev = devs; *dev != NULL && !desc; dev++)
     {
+        libusb_device_handle * hand;
+        fprintf(stderr, "libusb_open:\n");
+        r = libusb_open(*dev, &hand);
+        if(r < 0) {
+            fprintf(stderr, "couldn't open device\n");
+            continue;
+        }
+        
         struct libusb_device_descriptor devdesc;
-        int r = libusb_get_device_descriptor(*dev, &devdesc);
+        r = libusb_get_device_descriptor(*dev, &devdesc);
         if(r < 0)
             throw FormattedError("failed to get device descriptor");
         
-	fprintf(stderr, "%04x:%04x (bus %d, device %d)\n",
-	       devdesc.idVendor, devdesc.idProduct,
-	       libusb_get_bus_number(*dev), libusb_get_device_address(*dev));
-	
+        fprintf(stderr, "%04x:%04x (bus %d, device %d)\n", devdesc.idVendor, devdesc.idProduct,
+            libusb_get_bus_number(*dev), libusb_get_device_address(*dev));
+        
         if(devdesc.idVendor == vendID && devdesc.idProduct == prodID)
         {
-	    fprintf(stderr, "Found VID/PID match\n");
-            // Vendor and product ID match, install descriptor and check ID
-            desc = OpenTMC_LocalDevice(*dev, devdesc);
-	    fprintf(stderr, "Device opened\n");
-            if(sernum == "")
-                break;// take first found
-            else {
-		fprintf(stderr, "Sending Identify\n");
-                IDN_Response ident = Identify();
-                if(ident.serial == sernum)
-                    break;
-                else {
-                    delete desc;
-                    desc = NULL;
-                }
+            fprintf(stderr, "Found VID/PID match\n");
+            char foundSernum[1024] = {'\0'};
+            if(devdesc.iSerialNumber)
+                libusb_get_string_descriptor_ascii(hand, devdesc.iSerialNumber, (uint8_t*)foundSernum, sizeof(foundSernum));
+            
+            fprintf(stderr, "Device serial number: %s\n", foundSernum);
+            // Vendor and product ID match, check serial number or take first found if no serial number specified
+            if(sernum == "" || sernum == foundSernum)
+            {
+                desc = OpenTMC_LocalDevice(*dev, hand, devdesc);
+                hand = NULL;// desc has ownership of handle now
+                fprintf(stderr, "Device %s opened\n", foundSernum);
             }
-        }
-    }
+        } // if(vid and pid match)
+        
+        if(hand)
+            libusb_close(hand);
+    } // for(devices)
     
     libusb_free_device_list(devs, 1);
     if(!desc)

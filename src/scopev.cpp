@@ -141,7 +141,7 @@ int main(int argc, const char * argv[])
     
     try {
         // devices.push_back(new Device("localhost", "DS1EB134806939"));
-        devices.push_back(new Device("192.168.1.38", "DS1EB134806939"));
+        devices.push_back(new Device("192.168.1.21", "DS1EB134806939"));
         devices.back()->Connect();
         Capture(opts);
         // glutMainLoop();
