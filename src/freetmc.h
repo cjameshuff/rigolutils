@@ -33,7 +33,12 @@ class TMC_Device {
     virtual size_t Write(const std::vector<uint8_t> & msg) {return Write(&msg[0], msg.size());}
     virtual size_t Write(const std::string & msg) {return Write((const uint8_t*)&msg[0], msg.size());}
     
-    virtual size_t Read(uint8_t * msg, size_t nbytes) = 0;
+    virtual void StartRead(uint8_t * msg, size_t nbytes) = 0;
+    virtual ssize_t FinishRead(uint8_t * msg, size_t nbytes) = 0;
+    virtual size_t Read(uint8_t * msg, size_t nbytes) {
+        StartRead(msg, nbytes);
+        return FinishRead(msg, nbytes);
+    }
     virtual size_t Read(std::vector<uint8_t> & msg, size_t nbytes) {
         msg.resize(nbytes);
         size_t bytesRead = Read(&msg[0], nbytes);

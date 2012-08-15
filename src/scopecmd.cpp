@@ -265,6 +265,8 @@ int main(int argc, char ** argv)
                 // if(verbose) cerr << "Connected to server: " << sock->other << endl;
                 if(verbose) cerr << "Connected to server: " << endl;
                 scope = new DS1000E(new TMC_RemoteDevice(0x1AB1, 0x0588, serialNum, sock->sockfd));
+                sock->sockfd = -1;// TMC_RemoteDevice takes ownership of fd
+                delete sock;
             }
         
             r = DoCommands(argc, argv);

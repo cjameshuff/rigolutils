@@ -256,7 +256,7 @@ size_t TMC_LocalDevice::Write(const uint8_t * msg, size_t len)
 }
 
 
-size_t TMC_LocalDevice::Read(uint8_t * msg, size_t nbytes)
+void TMC_LocalDevice::StartRead(uint8_t * msg, size_t nbytes)
 {
     int r;
     uint8_t req[TMC_HDR_SIZE];
@@ -293,10 +293,16 @@ size_t TMC_LocalDevice::Read(uint8_t * msg, size_t nbytes)
     // cerr << "r: " << r << endl;
     if(r < 0 || actualLength < TMC_HDR_SIZE)
         throw FormattedError("libusb_bulk_transfer() failed (TMC_BulkIN(), request phase): %s", libusb_error_str(r));
-    
+}
+
+
+ssize_t TMC_LocalDevice::FinishRead(uint8_t * msg, size_t nbytes)
+{
+    int r;
     // Read data
     // cerr << "nbytes to transfer: " << nbytes << endl;
     std::vector<uint8_t> bfr(TMC_HDR_SIZE + nbytes);
+    int actualLength;
     size_t bytesReceived = 0;
     do {
         if(desc->isRigol)
@@ -312,8 +318,10 @@ size_t TMC_LocalDevice::Read(uint8_t * msg, size_t nbytes)
             // cerr << "headerSize1: " << headerSize << endl;
             if((headerSize + TMC_HDR_SIZE) > 64)
             {
-                r = libusb_bulk_transfer(desc->hand, BULK_ENDPOINT_IN, &bfr[actualLength1], nbytes + TMC_HDR_SIZE - actualLength1, &actualLength, TIMEOUT);
-                // r = libusb_bulk_transfer(desc->hand, BULK_ENDPOINT_IN, &bfr[actualLength1], headerSize + TMC_HDR_SIZE - actualLength1, &actualLength, TIMEOUT);
+                r = libusb_bulk_transfer(desc->hand, BULK_ENDPOINT_IN, &bfr[actualLength1],
+                    nbytes + TMC_HDR_SIZE - actualLength1, &actualLength, TIMEOUT);
+                // r = libusb_bulk_transfer(desc->hand, BULK_ENDPOINT_IN, &bfr[actualLength1],
+                //    headerSize + TMC_HDR_SIZE - actualLength1, &actualLength, TIMEOUT);
                 actualLength += actualLength1;
                 // cerr << "actualLength2: " << actualLength << endl;
                 if(r < 0)
@@ -342,8 +350,8 @@ size_t TMC_LocalDevice::Read(uint8_t * msg, size_t nbytes)
         if(bfr[0] != DEV_DEP_MSG_IN)
             throw FormattedError("TMC_BulkIN(): wrong message type received");
     
-        if(bfr[1] != bTag || bfr[2] != (~bTag & 0xFF))
-            throw FormattedError("TMC_BulkIN(): bad sequence number");
+        // if(bfr[1] != bTag || bfr[2] != (~bTag & 0xFF))
+        //     throw FormattedError("TMC_BulkIN(): bad sequence number");
     
         // TODO:
         // If sequence number is good but incorrect for request, ignore and try again?

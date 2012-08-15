@@ -14,7 +14,8 @@ class TMC_LocalDevice: public TMC_Device {
     
     virtual size_t Write(const uint8_t * msg, size_t len);
     
-    virtual size_t Read(uint8_t * msg, size_t nbytes);
+    virtual void StartRead(uint8_t * msg, size_t nbytes);
+    virtual ssize_t FinishRead(uint8_t * msg, size_t nbytes);
 };
 
 

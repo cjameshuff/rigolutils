@@ -1,16 +1,10 @@
 
 
-#include "remotedevice.h"
 
-#ifdef MACOSX
-#include <OpenGL/gl.h>
-#include <OpenGL/glu.h>
-#include <GLUT/glut.h>
-#else
-#include <GL/gl.h>
-#include <GL/glu.h>
-#include <GL/glut.h>
-#endif
+#include "scopev_model.h"
+#include "rigol_ds1k.h"
+#include "selector.h"
+#include "cfgmap.h"
 
 #include <iostream>
 #include <string>
@@ -22,129 +16,37 @@
 #include <stdio.h>
 #include <string.h>
 
-#include <Magick++.h>
+#include <gtk/gtk.h>
+#include "gtkhelpers.h"
 
-#include "rigoltmc.h"
-#include "plotting.h"
+#include <Magick++.h>
 
 using namespace std;
 using namespace Magick;
 
-inline void DisplayString(double x, double y, void * font, const char * str) {
-    glRasterPos2d(x, y);
-    for(const char * p = str; *p; ++p)
-        glutBitmapCharacter(font, *p);
-}
+ScopeModel * model = NULL;
+GtkApplication * gtkapp = NULL;
 
-
-inline void DisplayString(double x, double y, double size, const char * str) {
-    glPushMatrix();
-    glTranslated(x, y, 0);
-    glScaled(size, size, size);
-    for(const char * p = str; *p; ++p)
-        glutStrokeCharacter(GLUT_STROKE_ROMAN, *p);
-    glPopMatrix();
-}
-
-void Display();
+//******************************************************************************
 
 void PlotWaveforms(const std::string foutPath, PlotOpts & opts, DS1000E & device);
 
+static void startupApp(GApplication * app, gpointer userData);
+static void activateApp(GtkApplication * app, gpointer userData);
+bool UpdateCB(ScopeModel * model);
 
-// A device manages a local or remote connection to an instrument.
-// A channel represents captured data, with sample rate and time reference.
-// A capture collects channel data from a single device
-//
+//******************************************************************************
 
-struct Device {
-    string location;
-    string sernum;
-    Socket * sock;
-    DS1000E * device;
-    bool connected;
-    
-    Device(const string & l, const string & s):
-        location(l),
-        sernum(s),
-        sock(NULL),
-        device(NULL),
-        connected(false)
-    {}
-    
-    void Connect() {
-        cout << "Attempting to connect" << endl;
-        while(!sock) {
-            usleep(10000);
-            sock = ClientConnect(location, "9393");
-        }
-        cout << "Connected to server: " << sock->other << endl;
-        
-        device = new DS1000E(new TMC_RemoteDevice(0x1AB1, 0x0588, sernum, sock->sockfd));
-    }
-};
-
-class Capture {
-    Device * device;
-};
-
-
-vector<Device *> devices;
-vector<Capture *> captures;
-
-
-void Capture(PlotOpts & opts)
+int main(int argc, char * argv[])
 {
-    DS1000E & scope = *(devices.back()->device);
-    
-    cout << "Sending identify" << endl;
-    IDN_Response idn = scope.Identify();
-    cout << "Manufacturer: " << idn.manufacturer << endl;
-    cout << "Model: " << idn.model << endl;
-    cout << "Serial: " << idn.serial << endl;
-    cout << "Version: " << idn.version << endl;
-    
-    scope.Run();
-    sleep(1);
-    scope.Force();
-    sleep(1);
-    scope.Stop();
-    // cout << "Channel 1 scale: " << scope.ChanScale(0) << endl;
-    // cout << "Channel 1 offset: " << scope.ChanOffset(0) << endl;
-    // cout << "Time scale: " << scope.TimeScale() << endl;
-    // cout << "Time offset: " << scope.TimeOffset() << endl;
-    
-    cout << ":WAV:POIN:MODE? -> " << scope.Query(":WAV:POIN:MODE?") << endl;
-    scope.RawMode();
-    
-    opts.divT = scope.TimeScale();
-    opts.divV = 1.0;
-    cout << "opts.divT: " << opts.divT << endl;
-    // cout << ":WAV:POIN:MODE? -> " << scope.Query(":WAV:POIN:MODE?") << endl;
-    PlotWaveforms("testout.tiff", opts, scope);
-}
-
-
-int main(int argc, const char * argv[])
-{
-    // int glutargc = 0;
-    // char * glutargv[] = {};
-    // glutInit(&glutargc, glutargv);
-    // glutInitDisplayMode(GLUT_RGBA | GLUT_DOUBLE);
-    // glutInitWindowPosition(128,128); 
-    // glutInitWindowSize(800, 512); 
-    // glutCreateWindow("Scope"); 
-    // glutDisplayFunc(Display); 
-    
-    InitializeMagick(*argv);
-    
-    PlotOpts opts;
+    Init_RigolDS1K();
     
     try {
         // devices.push_back(new Device("localhost", "DS1EB134806939"));
-        devices.push_back(new Device("192.168.1.21", "DS1EB134806939"));
-        devices.back()->Connect();
-        Capture(opts);
-        // glutMainLoop();
+        // devices.push_back(new Device("192.168.1.21"));
+        // devices.back()->Connect();
+        // Capture(opts);
+        model = new ScopeModel;
     }
     catch(exception & err)
     {
@@ -152,7 +54,227 @@ int main(int argc, const char * argv[])
         return EXIT_FAILURE;
     }
     
-    return EXIT_SUCCESS;
+    InitializeMagick(*argv);
+    
+    gtkapp = gtk_application_new("org.cjameshuff.scopev", G_APPLICATION_FLAGS_NONE);
+    g_signal_connect(gtkapp, "startup", G_CALLBACK(startupApp), NULL);
+    g_signal_connect(gtkapp, "activate", G_CALLBACK(activateApp), NULL);
+    g_set_application_name("ScopeView");
+    
+    int status = g_application_run(G_APPLICATION(gtkapp), argc, argv);
+    g_object_unref(gtkapp);
+    return status;
+}
+
+
+//******************************************************************************
+
+void LoadCfgDlgResponse(GtkDialog * dlog, gint response, gpointer userData)
+{
+}
+
+static void Action_load_cfg(GSimpleAction * action, GVariant * parameter, gpointer userData)
+{
+}
+
+//******************************************************************************
+
+void SaveCfgDlgResponse(GtkDialog * dlog, gint response, gpointer userData)
+{
+}
+
+static void Action_save_cfg(GSimpleAction * action, GVariant * parameter, gpointer userData)
+{
+}
+
+//******************************************************************************
+
+void ConnectDlgResponse(GtkDialog * dlog, gint response, gpointer userData)
+{
+    WidgetDict * wdict = (WidgetDict*)userData;
+    if(response == GTK_RESPONSE_ACCEPT)
+    {
+        GtkWidget * addrEntry = wdict->Get("addrEntry");
+        GtkWidget * sernumEntry = wdict->Get("sernumEntry");
+        string addr = gtk_entry_get_text(GTK_ENTRY(addrEntry));
+        string sernum = gtk_entry_get_text(GTK_ENTRY(sernumEntry));
+        
+        printf("Connecting to %s ", sernum.c_str());
+        printf("at %s\n", addr.c_str());
+    }
+    else {
+        printf("response: %d\n", response);
+    }
+    delete wdict;
+    gtk_widget_destroy(GTK_WIDGET(dlog));
+}
+
+static void Action_connect(GSimpleAction * action, GVariant * parameter, gpointer userData)
+{
+    WidgetDict * wdict = new WidgetDict;
+    GtkWidget * window = NULL;//(GtkWidget *)userData;
+    GtkWidget * dlog = gtk_dialog_new_with_buttons("Connect", GTK_WINDOW(window),
+        (GtkDialogFlags)(GTK_DIALOG_MODAL | GTK_DIALOG_DESTROY_WITH_PARENT),
+        GTK_STOCK_CANCEL, GTK_RESPONSE_CANCEL,
+        GTK_STOCK_CONNECT, GTK_RESPONSE_ACCEPT,
+        NULL);
+    g_signal_connect(dlog, "response", G_CALLBACK(ConnectDlgResponse), wdict);
+    
+    GtkWidget * content = gtk_dialog_get_content_area(GTK_DIALOG(dlog));
+    GtkWidget * addrLabel = gtk_label_new("Address (leave blank for USB):");
+    GtkWidget * addrEntry = gtk_entry_new();
+    GtkWidget * sernumLabel = gtk_label_new("Serial Number:");
+    GtkWidget * sernumEntry = gtk_entry_new();
+    gtk_entry_set_max_length(GTK_ENTRY(addrEntry), 24);
+    gtk_entry_set_max_length(GTK_ENTRY(sernumEntry), 24);
+    
+    wdict->Add("addrEntry", addrEntry);
+    wdict->Add("sernumEntry", sernumEntry);
+    
+    gtk_container_add(GTK_CONTAINER(content), addrLabel);
+    gtk_container_add(GTK_CONTAINER(content), addrEntry);
+    gtk_container_add(GTK_CONTAINER(content), sernumLabel);
+    gtk_container_add(GTK_CONTAINER(content), sernumEntry);
+    
+    gtk_widget_show_all(dlog);
+}
+
+//******************************************************************************
+
+static void Action_about(GSimpleAction *action, GVariant *parameter, gpointer userData)
+{
+    GtkWidget * window = NULL;//(GtkWidget *)userData;
+    gtk_show_about_dialog(GTK_WINDOW(window),
+        "program-name", "ScopeView",
+        "version", "0.1a",
+        "copyright", "© 2012 Christopher James Huff",
+        "license-type", GTK_LICENSE_MIT_X11,
+        "website", "https://github.com/cjameshuff/rigolutils",
+        "title", "About ScopeView",
+        "comments", "Oscilloscope viewing, control, and data acquisition for Rigol DS1000 series oscilloscopes.",
+        NULL);
+}
+
+//******************************************************************************
+
+static void Action_quit(GSimpleAction * action, GVariant * parameter, gpointer userData)
+{
+    GApplication * app = (GApplication*)userData;
+    g_application_quit(app);
+}
+
+//******************************************************************************
+
+static GActionEntry appMenuActions[] = {
+    {"connect", Action_connect, NULL, NULL, NULL},
+    {"save-cfg", Action_save_cfg, NULL, NULL, NULL},
+    {"load-cfg", Action_load_cfg, NULL, NULL, NULL},
+    // {"save-image", Action_save_image, NULL, NULL, NULL},
+    // {"load-image", Action_load_image, NULL, NULL, NULL},
+    // {"save-raw-wfm", Action_save_raw_wfm, NULL, NULL, NULL},
+    // {"load-raw-wfm", Action_load_raw_wfm, NULL, NULL, NULL},
+    // {"save-rigol-wfm", Action_save_rigol_wfm, NULL, NULL, NULL},
+    // {"load-rigol-wfm", Action_load_rigol_wfm, NULL, NULL, NULL},
+    // {"save-sess", Action_save_sess, NULL, NULL, NULL},
+    // {"load-sess", Action_load_sess, NULL, NULL, NULL},
+    {"about", Action_about, NULL, NULL, NULL},
+    {"quit", Action_quit, NULL, NULL, NULL},
+};
+
+
+static void startupApp(GApplication * app, gpointer userData)
+{
+    g_action_map_add_action_entries(G_ACTION_MAP(app), appMenuActions, G_N_ELEMENTS(appMenuActions), app);
+    
+    MenuBuilder mb;
+    mb.Item("_About", "app.about");
+    {MB_Section sect(mb, "");
+        mb.Item("_Quit", "app.quit", "<Primary>q");
+    }
+    GMenu * appMenu = mb.Close();
+    
+    mb.Reset();
+    {MB_Submenu subm(mb, "File");
+        mb.Item("_Connect", "app.connect", "<Primary>k");
+        {MB_Section sect(mb, "");
+            // mb.Item("_Load Image", "app.load-image");
+            mb.Item("_Load Settings", "app.load-cfg");
+            mb.Item("_Load Rigol Waveform", "app.load-rigol-wfm");
+            mb.Item("_Load Raw Waveform", "app.load-raw-wfm");
+            // mb.Item("_Load Session", "app.load-sess");
+        }
+        {MB_Section sect(mb, "");
+            mb.Item("_Save Image", "app.save-image");
+            mb.Item("_Save Settings", "app.save-cfg");
+            mb.Item("_Save Waveform", "app.save-wfm");
+            // mb.Item("_Save Session", "app.save-sess");
+        }
+    }
+    {MB_Submenu subm(mb, "_Edit");
+        {MB_Section sect(mb, "");
+            mb.Item("_Cut", "app.cut", "<Primary>x");
+            mb.Item("_Copy", "app.copy", "<Primary>c");
+            mb.Item("_Paste", "app.paste", "<Primary>v");
+        }
+    }
+    {MB_Submenu subm(mb, "_Scope");
+        mb.Item("_Connect", "app.paste");
+        {MB_Section sect(mb, "");
+            mb.Item("_Add Waveform", "app.cut");
+        }
+    }
+    GMenu * mainMenu = mb.Close();
+    
+    gtk_application_set_app_menu(GTK_APPLICATION(app), G_MENU_MODEL(appMenu));
+    gtk_application_set_menubar(GTK_APPLICATION(app), G_MENU_MODEL(mainMenu));
+    g_object_unref(appMenu);
+    g_object_unref(mainMenu);
+} // startupApp()
+//******************************************************************************
+
+static void activateApp(GtkApplication * app, gpointer userData)
+{
+    GtkWidget * window = gtk_application_window_new(app);
+    gtk_window_set_title(GTK_WINDOW(window), "GTK Scratch");
+    gtk_window_set_default_size(GTK_WINDOW(window), 768, 640);
+    gtk_container_set_border_width(GTK_CONTAINER(window), 20);
+    
+    GtkWidget * waveformView = gtk_image_new();
+    gtk_image_set_from_file(GTK_IMAGE(waveformView), "NewFile4.wfm.png");
+    
+    GtkWidget * scrollView = gtk_scrolled_window_new(NULL, NULL);
+    gtk_container_add(GTK_CONTAINER(window), scrollView);
+    gtk_scrolled_window_add_with_viewport(GTK_SCROLLED_WINDOW(scrollView), waveformView);
+    
+    gtk_widget_show_all(window);
+    
+    // g_timeout_add(33, (GSourceFunc)UpdateCB, window);
+} // activateApp()
+//******************************************************************************
+
+bool UpdateCB(ScopeModel * model)
+{
+    model->Update();
+}
+
+void Display()
+{
+    Image image = Image(Geometry(1024, 512), "white");
+    int width = image.columns(), height = image.rows();
+    
+    uint8_t * imgbuffer = new uint8_t[width*height*4];
+    const PixelPacket * pixpkt = image.getConstPixels(0, 0, width, height);
+    for(size_t p = 0, j = 0, n = width*height; p < n; ++p, j += 4)
+    {
+        imgbuffer[j] = pixpkt[p].red >> 8;
+        imgbuffer[j+1] = pixpkt[p].green >> 8;
+        imgbuffer[j+2] = pixpkt[p].blue >> 8;
+        imgbuffer[j+3] = pixpkt[p].opacity >> 8;
+    }
+    // int x = 0, y = 0;
+    // PixelPacket & pixel = pixpkt[y*width + x];
+    
+    delete[] imgbuffer;
 }
 
 void GetChannel(int ch, DS1000E & scope, Waveform & wfm)
@@ -227,7 +349,3 @@ void PlotWaveforms(const std::string foutPath, PlotOpts & opts, DS1000E & scope)
     image.write(std::string(foutPath));
 }
 
-void Display()
-{
-    
-}

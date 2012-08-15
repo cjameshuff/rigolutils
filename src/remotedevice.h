@@ -51,7 +51,7 @@ class TMC_RemoteDevice: public TMC_Device {
         return len;
     }
     
-    virtual size_t Read(uint8_t * msg, size_t len)
+    virtual void StartRead(uint8_t * msg, size_t len)
     {
         uint8_t bfr[HEADER_SIZE];
         bfr[0] = 10;
@@ -61,7 +61,10 @@ class TMC_RemoteDevice: public TMC_Device {
         *(uint32_t*)&(bfr)[4] = 0;
         *(uint32_t*)&(bfr)[8] = htonl(len);
         conn.SendMessage(bfr, HEADER_SIZE);
-        
+    }
+    
+    virtual ssize_t FinishRead(uint8_t * msg, size_t len)
+    {
         std::vector<uint8_t> * resp = conn.WaitPopMessage();
         size_t nbytes = std::min(len, resp->size() - HEADER_SIZE);
         std::copy(resp->begin() + HEADER_SIZE, resp->begin() + HEADER_SIZE + nbytes, msg);

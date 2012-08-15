@@ -267,7 +267,7 @@ class Host {
 };
 
 
-Socket * ClientConnect(const std::string & host, const std::string & port)
+inline Socket * ClientConnect(const std::string & host, const std::string & port)
 {
     int status;
     struct addrinfo hints, * servinfos;

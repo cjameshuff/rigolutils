@@ -1,0 +1,35 @@
+
+
+CC = gcc
+CXX = g++
+
+
+LIBS = -lstdc++
+
+
+CFLAGS = -g -O3
+CFLAGS += `pkg-config --cflags libusb-1.0`
+
+LIBS += `pkg-config --libs libusb-1.0`
+
+OBJS = obj/rigolserv.cpp.o
+OBJS += obj/freetmc_local.cpp.o
+
+all: scopeserv
+
+obj:
+	mkdir -p obj
+
+scopeserv: obj src/simple_except.h src/freetmc.h src/netcomm.h $(OBJS)
+	$(CXX) $(OBJS) $(LIBS) -o scopeserv
+
+obj/%.cpp.o: src/%.cpp
+	$(CXX) -c $(CFLAGS) $< -o $@
+
+
+clean_all: clean
+	rm rigolserv
+
+clean:
+	rm -rf obj/*.o
+

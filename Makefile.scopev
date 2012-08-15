@@ -1,0 +1,47 @@
+
+
+CC = gcc
+CXX = g++
+
+
+LIBS = -lstdc++
+
+ifeq ($(shell uname -s), Darwin)
+	CFLAGS += -DMACOSX
+	LIBS += -L/usr/X11/lib
+else
+	CFLAGS += -DLINUX
+endif
+
+CFLAGS = -g -O3
+CFLAGS += `pkg-config --cflags libusb-1.0`
+CFLAGS += `pkg-config --cflags gtk+-3.0`
+CFLAGS += `GraphicsMagick++-config --cxxflags --cppflags`
+
+LIBS += `pkg-config --libs libusb-1.0`
+LIBS += `pkg-config --libs gtk+-3.0`
+LIBS += `GraphicsMagick++-config --libs`
+
+OBJS = obj/scopev.cpp.o
+OBJS += obj/scopev_model.cpp.o
+OBJS += obj/rigol_ds1k.cpp.o
+OBJS += obj/selector.cpp.o
+OBJS += obj/cfgmap.cpp.o
+OBJS += obj/plotting.cpp.o
+OBJS += obj/freetmc_local.cpp.o
+
+
+all: scopev
+
+obj:
+	mkdir -p obj
+
+scopev: obj src/simple_except.h src/freetmc.h src/netcomm.h src/remotedevice.h src/rigoltmc.h $(OBJS)
+	$(CC) $(OBJS) $(LIBS) -o scopev
+
+obj/%.cpp.o: src/%.cpp
+	$(CXX) -c $(CFLAGS) $< -o $@
+
+clean:
+	rm -rf obj/*.o
+

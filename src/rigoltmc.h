@@ -10,7 +10,8 @@ class DS1000E: public TMC_Device {
     DS1000E(TMC_Device * tmc): tmcDev(tmc) {}
     
     virtual size_t Write(const uint8_t * msg, size_t len) {tmcDev->Write(msg, len);}
-    virtual size_t Read(uint8_t * msg, size_t nbytes) {return tmcDev->Read(msg, nbytes);}
+    virtual void StartRead(uint8_t * msg, size_t nbytes) {return tmcDev->StartRead(msg, nbytes);}
+    virtual ssize_t FinishRead(uint8_t * msg, size_t nbytes) {return tmcDev->FinishRead(msg, nbytes);}
     
     // Main API
     
