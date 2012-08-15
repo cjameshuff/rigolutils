@@ -61,6 +61,8 @@ void ReadParams(const std::string & path, std::map<std::string, std::string> & p
         
         if(ch == ':')
             ch = fgetc(fin);
+        else
+            break;
         
         string encValue;
         while(ch != EOF && ch != '\n') {
@@ -114,7 +116,9 @@ int main(int argc, char * argv[])
 {
     std::map<std::string, std::string> params;
     params["foo"] = "bar";
-    params["Sernum"] = "51646135FA";
+    params[""] = "keyless";
+    params["valueless"] = "";
+    params["Sernum"] = "5164:6135:FA";
     params["addr"] = "192.168.3.21";
     params["complexString"] = "\\1, 2, 3,\n\\4, 5, 6";
     WriteParams("test.cfg", params);
