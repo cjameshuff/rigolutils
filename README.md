@@ -51,12 +51,6 @@ Utilities:
 * Code exists for reading most data from a .wfm waveform file. Again, need to make tools using it.
 
 
-Other:
-
-* Protocol needs cleaned up, useful commands implemented and useless ones culled.
-* Documentation.
-
-
 TODO
 =====
 

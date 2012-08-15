@@ -1,9 +1,7 @@
 
-Currently, only simple device connection and access is implemented
-
 Each connection is to one specific device. The server spawns a subprocess for each connection, allowing simultaneous access to multiple devices (including such things as simultaneously downloading waveforms from multiple devices) as hardware permits. However, only one connection is permitted to each device.
 
-Once a connection to the server is established, a ConnectToDevice command must be issued. DeviceAccess commands can then be issued to perform reads and writes to the device. The connection will be dropped if no commands are received for a given amount of time.
+Once a connection to the server is established, a ConnectToDevice command must be issued. DeviceAccess commands can then be issued to perform reads and writes to the device.
 
 TODO:
 
@@ -15,97 +13,88 @@ TODO:
 ## Packet format:
 
 All values in network byte order
-Command: 12 byte header followed by variable amount of data
+Command: 8 byte header followed by variable amount of data
 
-	uint cmd:8
-	uint cmd2:8
+	uint cmd:16
 	uint seqnum:8
 	uint seqnum2:8
 	uint payloadSize:32
-	uint unused:32
+	
 	uint payload:payloadSize
 
-Ack: 4 byte packet
-
-	uint cmd:8
-	uint cmd2:8
-	uint seqnum:8
-	uint seqnum2:8
+Framing is done SLIP-style:
+0xFF is an escape character
+0xFF 0xFE escapes the 0xFF character
+0xFF 0xFD terminates the current frame
 
 
-### Ping (cmd = 0, cmd2 = 0)
-
-Measure lag and function as a keep-alive function.
-If KeepAlive is not set to 0, connections will be dropped after KeepAlive seconds of inactivity.
-
-
-### SetKeepAlive (cmd = 0, cmd2 = 1)
-
-### Disconnect (cmd = 0, cmd2 = 2)
-
-### ListDevices (cmd = 1, cmd2 = 0)
-
-	uint cmd:8 = 2
-	uint cmd2:8 = 1
-	uint seqnum:8
-	uint seqnum2:8
-	uint payloadSize:32
-	uint vendorID:16
-	uint productID:16
-
-List serial numbers of all devices matching vendor ID and product ID.
-
-
-### ConnectToDevice (cmd = 1, cmd2 = 1)
+### Ping (cmd = 0x0000)
 
 Variable length:
 
-	uint cmd:8 = 2
-	uint cmd2:8 = 1
+	uint cmd:16 = 0x0000
 	uint seqnum:8
 	uint seqnum2:8
 	uint payloadSize:32
+	
+	uint payload:payloadSize
+
+Measure lag. Server responds immediately with identical packet. Payload can be a timestamp, padding, or absent, it is simply returned to the sender.
+
+
+### Disconnect (cmd = 0x0002)
+
+
+### ConnectToDevice (cmd = 0x0200)
+
+Variable length:
+
+	uint cmd:16 = 0x0200
+	uint seqnum:8
+	uint seqnum2:8
+	uint payloadSize:32 >= 4
+	
 	uint vendorID:16
 	uint productID:16
 	uint sernum:payloadSize
 
-Response is standard ack.
+Response has same format. If connection is successful, response has serial number of connected device. If connection fails, response has no payload.
 
-Sequentially tests each device with given vendor and product IDs, sending "*IDN?" to each.
-Connects to the first device that responds with the desired serial number.
-
-If given device ID is 255, an ID from the range 0-254 is assigned and used in the ack.
+Connect to device with given vendor and product ID and serial number. Connect to first found if no serial number provided.
 
 
-### ResetDevice (cmd = 5)
-
-16 bytes:
-
-	uint cmd:8 = 5
-	uint cmd2:8 = device ID, starting at 0x00
-	uint seqnum:8
-	uint seqnum2:8
-	uint payloadSize:32 = 0
-	uint unused:32
-	uint payload:payloadSize
-
-Response is standard ack.
-
-
-## DeviceAccess (cmd = 10, cmd2 = 0)
+### DeviceWrite (cmd = 10, cmd2 = 0)
 
 Command packet:
 
-	cmd: = 0x01
-	cmd2: unused
-	payloadSize: writeSize, command size
-	other: readSize, number of bytes to read after sending command
-	payload: writeSize bytes: command string
+	uint cmd:16 = 0x0F00
+	uint seqnum:8
+	uint seqnum2:8
+	uint payloadSize:32 >= 4
+	
+	uint readSize:32
+	writeData: payloadSize - 4
 
-Response packet:
+Response packet (only sent if read requested):
 
-	cmd: = 0x01
-	cmd2: device ID, starting at 0x00
-	payloadSize: bytesRead, number of bytes actually read back from device
-	other: not used
-	payload: writeSize bytes: response string
+	uint cmd:16 = 0x0F00
+	uint seqnum:8
+	uint seqnum2:8
+	uint payloadSize:32
+	
+	readData: payloadSize
+
+
+## Service Discovery
+
+The server supports discovery by responding to a PING message broadcast on UDP. The server responds with the server name, address, and a list of devices.
+The broadcast address and port are 225.0.0.50:49393. (TODO: IPv6 discovery)
+
+The UDP messages are of identical format to the TCP connection messages, except cmd is always 0x0000.
+
+	uint cmd:16
+	uint seqnum:8
+	uint seqnum2:8
+	uint payloadSize:32
+	
+	uint payload:payloadSize

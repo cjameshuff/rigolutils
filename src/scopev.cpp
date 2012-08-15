@@ -1,4 +1,30 @@
 
+//******************************************************************************
+// Global config:
+//  numKnownDevices: (int)count
+//  device[(int)id]: (string)sernum
+//
+//  [(string)sernum].deviceName: (string)name
+//  [(string)sernum].deviceAddress: (string)address
+//
+
+// Session config:
+//  numDevices: (int)count
+//  device[(int)id]: (string)sernum
+//  
+//  [(string)sernum].name: (string)name
+//  [(string)sernum].address: (string)address
+//  [(string)sernum].slaveTo: (string)sernum
+//
+//  numPlots: (int)count
+//  plot[(int)id].name: (string)name
+//  plot[(int)id].device: (string)sernum
+//  plot[(int)id].channel: (int)channelNum
+//  plot[(int)id].visible: true|false
+//  plot[(int)id].color: #RRGGBB
+// 
+//******************************************************************************
+
 
 
 #include "scopev_model.h"
@@ -27,6 +53,9 @@ using namespace Magick;
 ScopeModel * model = NULL;
 GtkApplication * gtkapp = NULL;
 
+std::map<std::string, std::string> globalConfig;
+std::map<std::string, std::string> sessionConfig;
+
 //******************************************************************************
 
 void PlotWaveforms(const std::string foutPath, PlotOpts & opts, DS1000E & device);
@@ -36,9 +65,69 @@ static void activateApp(GtkApplication * app, gpointer userData);
 bool UpdateCB(ScopeModel * model);
 
 //******************************************************************************
+class ScopeServerFinder: public ServerFinder {
+    vector<string> servers;
+  public:
+    ScopeServerFinder(uint8_t * buffer, size_t msgLen, const std::string & a, uint16_t qp, uint16_t rp):
+        ServerFinder(buffer, msgLen, a, qp, rp)
+    {}
+    
+    vector<string> & GetServers() {return servers;}
+    
+    virtual bool HandleResponse(uint8_t * buffer, size_t msgLen, sockaddr_in & srcAddr, socklen_t srcAddrLen)
+    {
+        cerr << "msgLen: " << msgLen << endl;
+        
+        if(msgLen < PKT_HEADER_SIZE) {
+            cerr << "Dropped short discovery response (msg size: " << msgLen << ")" << endl;
+            return false;
+        }
+        uint16_t cmd = PKT_CMD(buffer);
+        uint8_t seqnum = PKT_SEQ(buffer);
+        uint8_t seqnum2 = PKT_SEQ2(buffer);
+        uint32_t payloadSize = PKT_PAYLOAD_SIZE(buffer);
+        uint8_t * payload = PKT_PAYLOAD(buffer);
+        
+        if(!PKT_SEQ_GOOD(buffer)) {
+            cerr << "Dropped discovery response with bad sequence number" << endl;
+            return false;
+        }
+        
+        if((payloadSize + PKT_HEADER_SIZE) != msgLen) {
+            cerr << "Dropped discovery response with bad length" << endl;
+            return false;
+        }
+        
+        string response(payload, payload + payloadSize);
+        char s[INET6_ADDRSTRLEN];
+        struct sockaddr * sa = (struct sockaddr *)&srcAddr;
+        if(sa->sa_family == AF_INET)
+            inet_ntop(sa->sa_family, &(((struct sockaddr_in *)sa)->sin_addr), s, INET6_ADDRSTRLEN);
+        else
+            inet_ntop(sa->sa_family, &(((struct sockaddr_in6 *)sa)->sin6_addr), s, INET6_ADDRSTRLEN);
+        cerr << "Found server \"" << response << "\" at " << s << endl;
+        servers.push_back(response);
+        return true;
+    }
+};
 
 int main(int argc, char * argv[])
 {
+    globalConfig["connPort"] = "9393";
+    globalConfig["discPort"] = "49393";
+    globalConfig["discAddr_v4"] = "225.0.0.50";
+    
+    
+    std::vector<uint8_t> query(PKT_HEADER_SIZE);
+    PKT_SetCMD(query, CMD_PING);
+    PKT_SetSeq(query, 0);
+    PKT_SetPayloadSize(query, 0);
+    ScopeServerFinder finder(&query[0], query.size(), DISC_BCAST_ADDR, DISC_QUERY_PORT, DISC_RESP_PORT);
+    finder.PollFor(1.0);
+    
+    return EXIT_SUCCESS;
+    
+    
     Init_RigolDS1K();
     
     try {

@@ -12,7 +12,7 @@ CFLAGS += `pkg-config --cflags libusb-1.0`
 
 LIBS += `pkg-config --libs libusb-1.0`
 
-OBJS = obj/rigolserv.cpp.o
+OBJS = obj/scopeserv.cpp.o
 OBJS += obj/freetmc_local.cpp.o
 
 all: scopeserv

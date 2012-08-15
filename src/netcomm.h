@@ -11,6 +11,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <errno.h>
+#include <math.h>
 
 #include <sys/wait.h>
 #include <sys/types.h>
@@ -21,7 +22,20 @@
 #include <netdb.h>
 #include <netinet/in.h>
 
+#include <sys/time.h>
+
 #include "simple_except.h"
+
+
+// Return real time in seconds
+static inline double real_seconds(void)
+{
+    struct timeval newTime;
+    gettimeofday(&newTime, NULL);
+    return newTime.tv_sec + newTime.tv_usec / 1e6;
+}
+
+
 
 class Host;
 class Client;
@@ -317,5 +331,205 @@ inline Socket * ClientConnect(const std::string & host, const std::string & port
     return sock;
 }
 
+//******************************************************************************
+
+class DiscoverableServer {
+    int reqSock;
+    std::string addr;
+    int qport;
+    int rport;
+    
+  public:
+    DiscoverableServer(const std::string & a, uint16_t qp, uint16_t rp):
+        addr(a),
+        qport(qp),
+        rport(rp)
+    {
+        // Setup request socket
+        reqSock = socket(AF_INET, SOCK_DGRAM, 0);
+        if(reqSock < 0)
+        {
+            perror("Error while creating client socket: ");
+            abort();
+        }
+        
+        struct sockaddr_in serverAddr;
+        bzero((uint8_t*)&serverAddr, sizeof(serverAddr));
+        serverAddr.sin_family = AF_INET;
+        serverAddr.sin_port = htons(qport);
+        serverAddr.sin_addr.s_addr = INADDR_ANY;
+        if(bind(reqSock, (struct sockaddr *)&serverAddr, sizeof(serverAddr)) < 0)
+        {
+            perror("Error while binding client socket: ");
+            abort();
+        }
+    
+        struct ip_mreq mreq;
+        mreq.imr_multiaddr.s_addr = inet_addr(addr.c_str());
+        mreq.imr_interface.s_addr = htonl(INADDR_ANY);
+        if(setsockopt(reqSock, IPPROTO_IP, IP_ADD_MEMBERSHIP, &mreq, sizeof(mreq)) < 0)
+        {
+            perror("Error while reusing client socket: ");
+            abort();
+        }
+    }
+    
+    bool Poll(double secs = 0.001)
+    {
+        struct timeval timeout;
+        timeout.tv_sec = floor(secs);
+        timeout.tv_usec = (secs - floor(secs))*1e6;
+        
+        fd_set reqSocks;
+        FD_ZERO(&reqSocks);
+        FD_SET(reqSock, &reqSocks);
+        int sel = select(FD_SETSIZE, &reqSocks, NULL, NULL, &timeout);
+        if(sel < 0)
+        {
+            perror("select() returned error: ");
+            abort();
+        }
+        else if(sel == 0)
+        {
+            return false;
+        }
+        // std::cerr << "select() returned: " << sel << std::endl;
+        
+        struct sockaddr_in srcAddr;
+        socklen_t srcAddrLen;
+        uint8_t buffer[1024];// TODO: make max message length configurable
+        size_t msgLen = recvfrom(reqSock, buffer, 1024, 0, (struct sockaddr *)&srcAddr, &srcAddrLen);
+        
+        if(msgLen > 0)
+            return HandleRequest(buffer, msgLen, srcAddr, srcAddrLen);
+        else
+            return false;
+    }
+    
+    void SendResponse(uint8_t * buffer, size_t msgLen, sockaddr_in & srcAddr, socklen_t srcAddrLen) {
+        // struct sockaddr_storage ss;
+        sockaddr_in respAddr;
+        memcpy(&respAddr, &srcAddr, srcAddrLen);
+        respAddr.sin_port = htons(rport);
+        
+        // char s[INET6_ADDRSTRLEN];
+        // struct sockaddr * sa = (struct sockaddr *)&respAddr;
+        // if(sa->sa_family == AF_INET)
+        //     inet_ntop(sa->sa_family, &(((struct sockaddr_in *)sa)->sin_addr), s, INET6_ADDRSTRLEN);
+        // else
+        //     inet_ntop(sa->sa_family, &(((struct sockaddr_in6 *)sa)->sin6_addr), s, INET6_ADDRSTRLEN);
+        // std::cerr << "Sending response to: " << s << std::endl;
+        sendto(reqSock, buffer, msgLen, 0, (struct sockaddr *)&respAddr, srcAddrLen);
+    }
+    
+    virtual bool HandleRequest(uint8_t * buffer, size_t msgLen, sockaddr_in & srcAddr, socklen_t srcAddrLen) {
+        return true;
+    }
+};
+
+//******************************************************************************
+class ServerFinder {
+    int respSock;
+    std::string addr;
+    int qport;
+    int rport;
+  public:
+    ServerFinder(uint8_t * buffer, size_t msgLen, const std::string & a, uint16_t qp, uint16_t rp):
+        addr(a),
+        qport(qp),
+        rport(rp)
+    {
+        // Setup query response socket
+        respSock = socket(AF_INET, SOCK_DGRAM, 0);
+        if(respSock < 0)
+        {
+            perror("Error while creating client socket: ");
+            abort();
+        }
+        
+        struct sockaddr_in serverAddr;
+        bzero((uint8_t*)&serverAddr, sizeof(serverAddr));
+        serverAddr.sin_family = AF_INET;
+        serverAddr.sin_port = htons(rport);
+        serverAddr.sin_addr.s_addr = INADDR_ANY;
+        if(bind(respSock, (struct sockaddr *)&serverAddr, sizeof(serverAddr)) < 0)
+        {
+            perror("Error while binding client socket: ");
+            abort();
+        }
+        
+        
+        // Setup query broadcast socket
+        int bcastSock = socket(AF_INET, SOCK_DGRAM, 0);
+        if(bcastSock < 0)
+        {
+            perror("Error while creating broadcast socket: ");
+            abort();
+        }
+        
+        struct sockaddr_in bcastAddr;
+        bzero((uint8_t*)&bcastAddr, sizeof(bcastAddr));
+        bcastAddr.sin_family = AF_INET;
+        bcastAddr.sin_port = htons(qport);
+        bcastAddr.sin_addr.s_addr = inet_addr(addr.c_str());
+        
+        // Send query
+        sendto(bcastSock, buffer, msgLen, 0,
+               (struct sockaddr *)&bcastAddr, sizeof(bcastAddr));
+        
+        close(bcastSock);
+    }
+    ~ServerFinder() {
+        close(respSock);
+    }
+    
+    bool Poll(double secs = 0.001)
+    {
+        struct timeval timeout;
+        timeout.tv_sec = floor(secs);
+        timeout.tv_usec = (secs - floor(secs))*1e6;
+        
+        fd_set respSocks;
+        FD_ZERO(&respSocks);
+        FD_SET(respSock, &respSocks);
+        int sel = select(FD_SETSIZE, &respSocks, NULL, NULL, &timeout);
+        if(sel < 0)
+        {
+            perror("select() returned error: ");
+            abort();
+        }
+        else if(sel == 0)
+        {
+            return false;
+        }
+        std::cerr << "select() returned: " << sel << std::endl;
+        
+        struct sockaddr_in srcAddr;
+        socklen_t srcAddrLen;
+        uint8_t buffer[1024];// TODO: make max message length configurable
+        size_t msgLen = recvfrom(respSock, buffer, 1024, 0,
+                                 (struct sockaddr *)&srcAddr, &srcAddrLen);
+        
+        std::cerr << "selectmsgLen: " << msgLen << std::endl;
+        if(msgLen > 0)
+            return HandleResponse(buffer, msgLen, srcAddr, srcAddrLen);
+        else
+            return false;
+    }
+    
+    bool PollFor(double secs)
+    {
+        double start = real_seconds(), now = start;
+        while((now - start) < secs) {
+            Poll(secs - (now - start));
+            now = real_seconds();
+        }
+    }
+    
+    virtual bool HandleResponse(uint8_t * buffer, size_t msgLen, sockaddr_in & srcAddr, socklen_t srcAddrLen) {
+        return true;
+    }
+};
+//******************************************************************************
 
 #endif // NETCOMM_H
