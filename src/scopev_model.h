@@ -13,7 +13,7 @@
 #define SCOPEV_MODEL_H
 //******************************************************************************
 
-#include "remotedevice.h"
+#include "freetmc_remote.h"
 #include "plotting.h"
 #include "rigoltmc.h"
 
@@ -67,6 +67,8 @@ class ScopeModel {
     ~ScopeModel();
     
     void Update();
+    
+    void Connect(const std::string & l, uint16_t vid, uint16_t pid, const std::string & s);
 };
 
 

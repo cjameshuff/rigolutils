@@ -1,5 +1,7 @@
 
 #include "scopev_model.h"
+#include "freetmc_local.h"
+#include "freetmc_remote.h"
 
 using namespace std;
 
@@ -46,13 +48,6 @@ void Device::Connect()
 void UpdateWaveforms(PlotOpts & opts, Device * dev)
 {
     DS1000E & scope = *(dev->device);
-    
-    cout << "Sending identify" << endl;
-    IDN_Response idn = scope.Identify();
-    cout << "Manufacturer: " << idn.manufacturer << endl;
-    cout << "Model: " << idn.model << endl;
-    cout << "Serial: " << idn.serial << endl;
-    cout << "Version: " << idn.version << endl;
     
     scope.Run();
     sleep(1);
@@ -114,5 +109,37 @@ void ScopeModel::Update()
             }
         }
     }
+}
+
+
+void ScopeModel::Connect(const std::string & loc, uint16_t vid, uint16_t pid, const std::string & sernum)
+{
+    TMC_Device * dev = NULL;
+    if(loc == "USB" || loc == "")
+    {
+        dev = new TMC_LocalDevice(vid, pid, sernum);
+    }
+    else
+    {
+        std::cerr << "Attempting to connect" << std::endl;
+        Socket * sock = NULL;
+        while(!sock) {
+            usleep(10000);
+            sock = ClientConnect(loc, "9393");
+        }
+        std::cerr << "Connected to server: " << sock->other << std::endl;
+        
+        dev = new TMC_RemoteDevice(vid, pid, sernum, sock->sockfd);
+        sock->sockfd = -1;// TMC_RemoteDevice takes ownership of fd
+        delete sock;
+    }
+    
+    cout << "Sending identify" << endl;
+    IDN_Response idn = dev->Identify();
+    cout << "Manufacturer: " << idn.manufacturer << endl;
+    cout << "Model: " << idn.model << endl;
+    cout << "Serial: " << idn.serial << endl;
+    cout << "Version: " << idn.version << endl;
+    //device = new DS1000E(dev);
 }
 

@@ -1,20 +1,15 @@
 
 //******************************************************************************
 // Global config:
-//  numKnownDevices: (int)count
-//  device[(int)id]: (string)sernum
-//
-//  [(string)sernum].deviceName: (string)name
-//  [(string)sernum].deviceAddress: (string)address
+//  devices.[(string)sernum].name: (string)name
+//  devices.[(string)sernum].address: (string)address
 //
 
 // Session config:
-//  numDevices: (int)count
-//  device[(int)id]: (string)sernum
-//  
-//  [(string)sernum].name: (string)name
-//  [(string)sernum].address: (string)address
-//  [(string)sernum].slaveTo: (string)sernum
+//  devices.sernums.[(string)sernum]
+//  devices.[(string)sernum].name: (string)name
+//  devices.[(string)sernum].address: (string)address
+//  devices.[(string)sernum].slaveTo: (string)sernum
 //
 //  numPlots: (int)count
 //  plot[(int)id].name: (string)name
@@ -27,6 +22,7 @@
 
 
 
+#include "freetmc_local.h"
 #include "scopev_model.h"
 #include "rigol_ds1k.h"
 #include "selector.h"
@@ -53,8 +49,8 @@ using namespace Magick;
 ScopeModel * model = NULL;
 GtkApplication * gtkapp = NULL;
 
-std::map<std::string, std::string> globalConfig;
-std::map<std::string, std::string> sessionConfig;
+configmap_t globalConfig;
+configmap_t sessionConfig;
 
 //******************************************************************************
 
@@ -68,11 +64,20 @@ bool UpdateCB(ScopeModel * model);
 class ScopeServerFinder: public ServerFinder {
     vector<string> servers;
   public:
-    ScopeServerFinder(uint8_t * buffer, size_t msgLen, const std::string & a, uint16_t qp, uint16_t rp):
-        ServerFinder(buffer, msgLen, a, qp, rp)
+    ScopeServerFinder():
+        ServerFinder(DISC_BCAST_ADDR, DISC_QUERY_PORT, DISC_RESP_PORT)
     {}
     
     vector<string> & GetServers() {return servers;}
+    
+    void Query(const set<uint32_t> & VIDPIDs) {
+        vector<uint8_t> query(PKT_HEADER_SIZE);
+        PKT_SetCMD(query, CMD_PING);
+        PKT_SetSeq(query, 0x55);
+        PKT_SetPayloadSize(query, 0);
+        
+        SendQuery(&query[0], query.size());
+    }
     
     virtual bool HandleResponse(uint8_t * buffer, size_t msgLen, sockaddr_in & srcAddr, socklen_t srcAddrLen)
     {
@@ -99,51 +104,53 @@ class ScopeServerFinder: public ServerFinder {
         }
         
         string response(payload, payload + payloadSize);
-        char s[INET6_ADDRSTRLEN];
-        struct sockaddr * sa = (struct sockaddr *)&srcAddr;
-        if(sa->sa_family == AF_INET)
-            inet_ntop(sa->sa_family, &(((struct sockaddr_in *)sa)->sin_addr), s, INET6_ADDRSTRLEN);
-        else
-            inet_ntop(sa->sa_family, &(((struct sockaddr_in6 *)sa)->sin6_addr), s, INET6_ADDRSTRLEN);
-        cerr << "Found server \"" << response << "\" at " << s << endl;
+        // char s[INET6_ADDRSTRLEN];
+        // struct sockaddr * sa = (struct sockaddr *)&srcAddr;
+        // if(sa->sa_family == AF_INET)
+        //     inet_ntop(sa->sa_family, &(((struct sockaddr_in *)sa)->sin_addr), s, INET6_ADDRSTRLEN);
+        // else
+        //     inet_ntop(sa->sa_family, &(((struct sockaddr_in6 *)sa)->sin6_addr), s, INET6_ADDRSTRLEN);
+        // cerr << "Found server \"" << response << "\" at " << s << endl;
         servers.push_back(response);
         return true;
     }
 };
 
+
+//******************************************************************************
+void ExitCleanup()
+{
+    libusb_exit(NULL);
+}
+
+//******************************************************************************
 int main(int argc, char * argv[])
 {
     globalConfig["connPort"] = "9393";
-    globalConfig["discPort"] = "49393";
+    globalConfig["discQPort"] = "49393";
+    globalConfig["discRPort"] = "49394";
     globalConfig["discAddr_v4"] = "225.0.0.50";
+    globalConfig["supportedVID_PID.DS1102E"] = "1AB1:0588";
     
+    InitializeMagick(*argv);
     
-    std::vector<uint8_t> query(PKT_HEADER_SIZE);
-    PKT_SetCMD(query, CMD_PING);
-    PKT_SetSeq(query, 0);
-    PKT_SetPayloadSize(query, 0);
-    ScopeServerFinder finder(&query[0], query.size(), DISC_BCAST_ADDR, DISC_QUERY_PORT, DISC_RESP_PORT);
-    finder.PollFor(1.0);
-    
-    return EXIT_SUCCESS;
-    
+    int r = libusb_init(NULL);
+    if(r < 0) {
+        cerr << "libusb_init() failed" << endl;
+        return EXIT_FAILURE;
+    }
+    atexit(ExitCleanup);
     
     Init_RigolDS1K();
     
     try {
-        // devices.push_back(new Device("localhost", "DS1EB134806939"));
-        // devices.push_back(new Device("192.168.1.21"));
-        // devices.back()->Connect();
-        // Capture(opts);
         model = new ScopeModel;
     }
     catch(exception & err)
     {
-        cout << "Caught exception: " << err.what() << endl;
+        cerr << "Caught exception: " << err.what() << endl;
         return EXIT_FAILURE;
     }
-    
-    InitializeMagick(*argv);
     
     gtkapp = gtk_application_new("org.cjameshuff.scopev", G_APPLICATION_FLAGS_NONE);
     g_signal_connect(gtkapp, "startup", G_CALLBACK(startupApp), NULL);
@@ -183,13 +190,40 @@ void ConnectDlgResponse(GtkDialog * dlog, gint response, gpointer userData)
     WidgetDict * wdict = (WidgetDict*)userData;
     if(response == GTK_RESPONSE_ACCEPT)
     {
+        GtkWidget * selectionCombo = wdict->Get("selection");
         GtkWidget * addrEntry = wdict->Get("addrEntry");
         GtkWidget * sernumEntry = wdict->Get("sernumEntry");
-        string addr = gtk_entry_get_text(GTK_ENTRY(addrEntry));
-        string sernum = gtk_entry_get_text(GTK_ENTRY(sernumEntry));
+        string addr, sernum;
+        uint16_t vid = 0xFFFF;
+        uint16_t pid = 0xFFFF;
         
-        printf("Connecting to %s ", sernum.c_str());
-        printf("at %s\n", addr.c_str());
+        const gchar * selection = gtk_combo_box_get_active_id(GTK_COMBO_BOX(selectionCombo));
+        if(!selection || strcmp(selection, "address") == 0)
+            printf("Manual connection\n");
+        else
+            printf("From list: %s\n", selection);
+        
+        if(selection && (strcmp(selection, "address") != 0))
+        {
+            vector<string> selInfo;
+            split(selection, ':', selInfo);
+            vid = strtol(selInfo[1].c_str(), NULL, 16) & 0xFFFF;
+            pid = strtol(selInfo[2].c_str(), NULL, 16) & 0xFFFF;
+            addr = selInfo[0];
+            sernum = selInfo[3];
+        }
+        else
+        {
+            addr = gtk_entry_get_text(GTK_ENTRY(addrEntry));
+            sernum = gtk_entry_get_text(GTK_ENTRY(sernumEntry));
+        }
+        printf("Connecting to %s", sernum.c_str());
+        if(addr == "" || addr == "USB")
+            printf(" on USB\n", addr.c_str());
+        else
+            printf(" at %s\n", addr.c_str());
+        
+        model->Connect(addr, vid, pid, sernum);
     }
     else {
         printf("response: %d\n", response);
@@ -210,6 +244,47 @@ static void Action_connect(GSimpleAction * action, GVariant * parameter, gpointe
     g_signal_connect(dlog, "response", G_CALLBACK(ConnectDlgResponse), wdict);
     
     GtkWidget * content = gtk_dialog_get_content_area(GTK_DIALOG(dlog));
+    
+    GtkWidget * selectionCombo = gtk_combo_box_text_new();
+    gtk_combo_box_text_append(GTK_COMBO_BOX_TEXT(selectionCombo), "address", "Connect by Address and Serial Number");
+    gtk_combo_box_set_active_id(GTK_COMBO_BOX(selectionCombo), "address");
+    
+    configmap_t supportedDevs;
+    EntriesWithPrefix(globalConfig, "supportedVID_PID.", supportedDevs);
+    
+    std::set<uint32_t> VIDPIDs;
+    configmap_t::iterator di;
+    for(di = supportedDevs.begin(); di != supportedDevs.end(); ++di)
+    {
+        vector<string> ids;
+        split(di->second, ':', ids);
+        if(ids.size() < 2)
+            continue;
+        uint32_t vid = strtol(ids[0].c_str(), NULL, 16) & 0xFFFF;
+        uint32_t pid = strtol(ids[1].c_str(), NULL, 16) & 0xFFFF;
+        VIDPIDs.insert((vid << 16) | pid);
+    }
+    
+    vector<DevIdent> localDevices;
+    ListUSB_Devices(VIDPIDs, localDevices);
+    vector<DevIdent>::iterator ldi;
+    for(ldi = localDevices.begin(); ldi != localDevices.end(); ++ldi)
+    {
+        char bfr[1024];
+        snprintf(bfr, 1024, "USB:%04X:%04X:%s", ldi->vendID, ldi->prodID, ldi->sernum.c_str());
+        char bfr2[1024];
+        snprintf(bfr2, 1024, "USB:%04X:%04X:%s", ldi->vendID, ldi->prodID, ldi->sernum.c_str());
+        gtk_combo_box_text_append(GTK_COMBO_BOX_TEXT(selectionCombo), bfr, bfr2);
+    }
+    
+    GtkWidget * scopeTypeCombo = gtk_combo_box_text_new();
+    gtk_combo_box_text_append(GTK_COMBO_BOX_TEXT(scopeTypeCombo), "DS1102E", "DS1102E");
+    
+    // ScopeServerFinder finder;
+    // finder.SendQuery(VIDPIDs);
+    // finder.PollFor(1.0);
+    
+    
     GtkWidget * addrLabel = gtk_label_new("Address (leave blank for USB):");
     GtkWidget * addrEntry = gtk_entry_new();
     GtkWidget * sernumLabel = gtk_label_new("Serial Number:");
@@ -217,13 +292,18 @@ static void Action_connect(GSimpleAction * action, GVariant * parameter, gpointe
     gtk_entry_set_max_length(GTK_ENTRY(addrEntry), 24);
     gtk_entry_set_max_length(GTK_ENTRY(sernumEntry), 24);
     
-    wdict->Add("addrEntry", addrEntry);
-    wdict->Add("sernumEntry", sernumEntry);
-    
+    gtk_container_add(GTK_CONTAINER(content), selectionCombo);
+    gtk_container_add(GTK_CONTAINER(content), gtk_separator_new(GTK_ORIENTATION_HORIZONTAL));
+    gtk_container_add(GTK_CONTAINER(content), scopeTypeCombo);
     gtk_container_add(GTK_CONTAINER(content), addrLabel);
     gtk_container_add(GTK_CONTAINER(content), addrEntry);
     gtk_container_add(GTK_CONTAINER(content), sernumLabel);
     gtk_container_add(GTK_CONTAINER(content), sernumEntry);
+    
+    wdict->Add("addrEntry", addrEntry);
+    wdict->Add("sernumEntry", sernumEntry);
+    wdict->Add("selection", selectionCombo);
+    wdict->Add("scopeType", scopeTypeCombo);
     
     gtk_widget_show_all(dlog);
 }
@@ -344,6 +424,7 @@ static void activateApp(GtkApplication * app, gpointer userData)
 bool UpdateCB(ScopeModel * model)
 {
     model->Update();
+    return true;
 }
 
 void Display()

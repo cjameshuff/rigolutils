@@ -11,7 +11,6 @@
 #include <iostream>
 #include <algorithm>
 
-#include <libusb-1.0/libusb.h>
 
 using namespace std;
 
@@ -60,7 +59,6 @@ const uint8_t VEND_SPECIFIC_OUT    = 126; // OUT
 const uint8_t REQ_VEND_SPECIFIC_IN = 127; // OUT
 const uint8_t VEND_SPECIFIC_IN     = 127; // IN
 
-static int NumTMC_LocalDevices = 0;
 
 struct TMC_Descriptor {
     libusb_device_handle * hand;
@@ -125,20 +123,52 @@ TMC_Descriptor * OpenTMC_LocalDevice(libusb_device * dev, libusb_device_handle *
     return desc;
 }
 
+void ListUSB_Devices(const std::set<uint32_t> & VIDPIDs,
+                     std::vector<DevIdent> & devices)
+{
+    libusb_device ** devs;
+    ssize_t cnt = libusb_get_device_list(NULL, &devs);
+    if(cnt < 0)
+        throw FormattedError("libusb_get_device_list() failed");
+    
+    for(libusb_device ** dev = devs; *dev != NULL; dev++)
+    {
+        libusb_device_handle * hand;
+        int r = libusb_open(*dev, &hand);
+        if(r < 0) {
+            fprintf(stderr, "couldn't open device\n");
+            continue;
+        }
+        
+        struct libusb_device_descriptor devdesc;
+        r = libusb_get_device_descriptor(*dev, &devdesc);
+        if(r < 0)
+            throw FormattedError("failed to get device descriptor");
+        
+        if(VIDPIDs.empty() || VIDPIDs.find((devdesc.idVendor << 16) | devdesc.idProduct) != VIDPIDs.end())
+        {
+            char foundSernum[1024] = {'\0'};
+            if(devdesc.iSerialNumber)
+                libusb_get_string_descriptor_ascii(hand, devdesc.iSerialNumber, (uint8_t*)foundSernum, sizeof(foundSernum));
+            
+            DevIdent ident;
+            ident.vendID = devdesc.idVendor;
+            ident.prodID = devdesc.idProduct;
+            ident.sernum = foundSernum;
+            devices.push_back(ident);
+        } // if(vid and pid match)
+        
+        libusb_close(hand);
+    } // for(devices)
+    
+    libusb_free_device_list(devs, 1);
+}
 
 TMC_LocalDevice::TMC_LocalDevice(uint16_t vendID, uint16_t prodID, const std::string & sn):
     desc(NULL),
     sernum(sn)
 {
     int r;
-    
-    if(NumTMC_LocalDevices == 0)
-    {
-        r = libusb_init(NULL);
-        if(r < 0)
-            throw FormattedError("libusb_init() failed");
-    }
-    ++NumTMC_LocalDevices;
     
     printf("searching for matching device\n");
     
@@ -195,11 +225,6 @@ TMC_LocalDevice::TMC_LocalDevice(uint16_t vendID, uint16_t prodID, const std::st
 TMC_LocalDevice::~TMC_LocalDevice()
 {
     delete desc;
-    --NumTMC_LocalDevices;
-    if(NumTMC_LocalDevices == 0)
-    {
-        libusb_exit(NULL);
-    }
 }
 
 

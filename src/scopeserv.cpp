@@ -3,6 +3,7 @@
 #include "rigoltmc.h"
 #include "netcomm.h"
 #include "protocol.h"
+#include "cfgmap.h"
 
 #include <iostream>
 
@@ -19,6 +20,7 @@
 using namespace std;
 
 DS1000E * scope = NULL;
+configmap_t globalConfig;
 
 
 void sigchld_handler(int s)
@@ -107,13 +109,32 @@ class ScopeDiscoverableServer: public DiscoverableServer {
         std::cerr << "Received discovery query from: " << s << std::endl;
         // cerr << "Sent response" << endl;
         
-        string servName = "Test Server";
+        // Extract desired VID/PID pairs
+        // std::set<uint32_t> VIDPIDs;
+        // configmap_t::iterator di;
+        // for(di = supportedDevs.begin(); di != supportedDevs.end(); ++di)
+        // {
+        //     vector<string> ids;
+        //     split(di->second, ':', ids);
+        //     if(ids.size() < 2)
+        //         continue;
+        //     uint32_t vid = strtol(ids[0].c_str(), NULL, 16) & 0xFFFF;
+        //     uint32_t pid = strtol(ids[1].c_str(), NULL, 16) & 0xFFFF;
+        //     VIDPIDs.insert((vid << 16) | pid);
+        // }
+        //     
+        // std::vector<DevIdent> localDevices;
+        // ListUSB_Devices(VIDPIDs, localDevices);
+        
+        
+        string servName = globalConfig["serverName"];
         std::vector<uint8_t> resp(servName.size() + PKT_HEADER_SIZE);
         PKT_SetCMD(resp, CMD_PING);
         PKT_SetSeq(resp, 0);
         PKT_SetPayloadSize(resp, servName.size());
         uint8_t * payload = PKT_PAYLOAD(resp);
         
+        // Encode server name and matching devices
         std::copy(servName.begin(), servName.end(), payload);
         
         SendResponse(&resp[0], resp.size(), srcAddr, srcAddrLen);
@@ -122,9 +143,24 @@ class ScopeDiscoverableServer: public DiscoverableServer {
 };
 
 //******************************************************************************
+void ExitCleanup()
+{
+    libusb_exit(NULL);
+}
+//******************************************************************************
 
 int main(int argc, const char * argv[])
 {
+    globalConfig["serverName"] = "Server";
+    
+    int r = libusb_init(NULL);
+    if(r < 0) {
+        cerr << "libusb_init() failed" << endl;
+        return EXIT_FAILURE;
+    }
+    
+    atexit(ExitCleanup);
+    
     try {
         struct sigaction sa;
         sa.sa_handler = sigchld_handler;
@@ -151,12 +187,22 @@ int main(int argc, const char * argv[])
             
             if(sock)
             {
+                // Exit libusb and re-init for both parent and child after the fork
+                // Unsure if this is necessary, but it may prevent problems.
+                libusb_exit(NULL);
+                
                 if(fork())
                 {
                     // If the main process, delete sock and go back to waiting for connections
                     // Else loop breaks
                     delete sock;
                     sock = NULL;
+                }
+                
+                r = libusb_init(NULL);
+                if(r < 0) {
+                    cerr << "libusb_init() failed" << endl;
+                    return EXIT_FAILURE;
                 }
             }
         }

@@ -23,12 +23,13 @@ LIBS += `pkg-config --libs gtk+-3.0`
 LIBS += `GraphicsMagick++-config --libs`
 
 OBJS = obj/scopev.cpp.o
+OBJS += obj/cfgmap.cpp.o
+OBJS += obj/freetmc_local.cpp.o
+OBJS += obj/freetmc_remote.cpp.o
 OBJS += obj/scopev_model.cpp.o
 OBJS += obj/rigol_ds1k.cpp.o
 OBJS += obj/selector.cpp.o
-OBJS += obj/cfgmap.cpp.o
 OBJS += obj/plotting.cpp.o
-OBJS += obj/freetmc_local.cpp.o
 
 
 all: scopev
@@ -36,7 +37,7 @@ all: scopev
 obj:
 	mkdir -p obj
 
-scopev: obj src/simple_except.h src/freetmc.h src/netcomm.h src/remotedevice.h src/rigoltmc.h $(OBJS)
+scopev: obj src/simple_except.h src/freetmc.h src/netcomm.h src/freetmc_remote.h src/rigoltmc.h $(OBJS)
 	$(CC) $(OBJS) $(LIBS) -o scopev
 
 obj/%.cpp.o: src/%.cpp

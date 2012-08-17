@@ -2,7 +2,7 @@
 #include "freetmc.h"
 #include "rigoltmc.h"
 #include "freetmc_local.h"
-#include "remotedevice.h"
+#include "freetmc_remote.h"
 
 #include <iostream>
 #include <map>

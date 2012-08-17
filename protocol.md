@@ -20,7 +20,7 @@ Command: 8 byte header followed by variable amount of data
 	uint seqnum2:8
 	uint payloadSize:32
 	
-	uint payload:payloadSize
+	uint payload:payloadSize bytes
 
 Framing is done SLIP-style:
 0xFF is an escape character
@@ -37,7 +37,7 @@ Variable length:
 	uint seqnum2:8
 	uint payloadSize:32
 	
-	uint payload:payloadSize
+	uint payload:payloadSize bytes
 
 Measure lag. Server responds immediately with identical packet. Payload can be a timestamp, padding, or absent, it is simply returned to the sender.
 
@@ -54,9 +54,8 @@ Variable length:
 	uint seqnum2:8
 	uint payloadSize:32 >= 4
 	
-	uint vendorID:16
-	uint productID:16
-	uint sernum:payloadSize
+	uint vendorID_productID:32 (vendor ID in high 2 bytes, product ID in low 2 bytes)
+	uint sernum:payloadSize bytes
 
 Response has same format. If connection is successful, response has serial number of connected device. If connection fails, response has no payload.
 
@@ -73,7 +72,7 @@ Command packet:
 	uint payloadSize:32 >= 4
 	
 	uint readSize:32
-	writeData: payloadSize - 4
+	writeData: payloadSize - 4 bytes
 
 Response packet (only sent if read requested):
 
@@ -82,7 +81,7 @@ Response packet (only sent if read requested):
 	uint seqnum2:8
 	uint payloadSize:32
 	
-	readData: payloadSize
+	readData: payloadSize bytes
 
 
 ## Service Discovery
@@ -90,11 +89,31 @@ Response packet (only sent if read requested):
 The server supports discovery by responding to a PING message broadcast on UDP. The server responds with the server name, address, and a list of devices.
 The broadcast address and port are 225.0.0.50:49393. (TODO: IPv6 discovery)
 
-The UDP messages are of identical format to the TCP connection messages, except cmd is always 0x0000.
+The UDP messages are of identical format to the TCP messages, except cmd is always 0x0000 and the sequence number pair is always 0x55:0xAA.
 
-	uint cmd:16
-	uint seqnum:8
-	uint seqnum2:8
+Discovery query:
+	uint cmd:16 = 0x0000
+	uint seqnum:8 = 0x55
+	uint seqnum2:8 = 0xAA
 	uint payloadSize:32
 	
-	uint payload:payloadSize
+	uint numSupportedDevices:32
+	uint supportedDevices: numSupportedDevices*4 bytes
+	
+
+The payload consists of a list of supported VID/PID pairs (as used in the ConnectToDevice message).
+
+The response has an identical header, with a payload of the server name and a list of entries for the matching connected devices.
+Server name:
+	uint serverNameSize:32
+	uint serverName: serverNameSize bytes
+
+Followed by 0 or more of:
+	uint VIDPID:32
+	uint sernumSize:32
+	uint sernum: sernumSize bytes
+	
+
+
+
+

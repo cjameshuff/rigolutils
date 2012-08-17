@@ -47,7 +47,7 @@ void UnescapeStr(const string & input, string & output)
     }
 } // UnescapeStr()
 
-void ReadParams(const std::string & path, std::map<std::string, std::string> & params)
+void ReadParams(const std::string & path, configmap_t & params)
 {
     FILE * fin = fopen(path.c_str(), "rb");
     int ch = fgetc(fin);
@@ -79,10 +79,10 @@ void ReadParams(const std::string & path, std::map<std::string, std::string> & p
     fclose(fin);
 } // ReadParams()
 
-void WriteParams(const std::string & path, const std::map<std::string, std::string> & params)
+void WriteParams(const std::string & path, const configmap_t & params)
 {
     FILE * fout = fopen(path.c_str(), "wb");
-    std::map<std::string, std::string>::const_iterator pitr;
+    configmap_t::const_iterator pitr;
     for(pitr = params.begin(); pitr != params.end(); ++pitr)
     {
         string escaped;
@@ -99,22 +99,57 @@ void WriteParams(const std::string & path, const std::map<std::string, std::stri
 // g++ -DTEST_CFGMAP cfgmap.cpp -o test_cfgmap
 #ifdef TEST_CFGMAP
 
-void TestValue(const std::string & key, const std::string & value, const std::map<std::string, std::string> & params)
+#include <list>
+#include <vector>
+#include <stdarg.h>
+
+
+int testsFailed = 0;
+
+void TestValue(const std::string & key, const std::string & value, const configmap_t & params)
 {
-    std::map<std::string, std::string>::const_iterator pitr = params.find(key);
+    configmap_t::const_iterator pitr = params.find(key);
     if(pitr == params.end()) {
         cerr << "Test failed, key \"" << key << "\" not found in params" << endl;
         exit(EXIT_FAILURE);
     }
     if(pitr->second != value) {
+        ++testsFailed;
         cerr << "Test failed, expected value \"" << value << "\", found \"" << pitr->second << "\"" << endl;
-        exit(EXIT_FAILURE);
     }
+}
+
+void TestSplit(const char * s, char ch, size_t n, ...)
+{
+    vector<string> result;
+    split(s, ch, result);
+    
+    if(result.size() != n) {
+        cerr << "split() test failed: split(" << s << ")" << endl;
+        cerr << "Incorrect size: " << result.size() << ", expected: " << n << endl;
+        ++testsFailed;
+        return;
+    }
+    
+    vector<string>::iterator subs = result.begin();
+    va_list va;
+    va_start(va, n);
+    for(int j = 0; j < n; ++j, ++subs)
+    {
+        char * expSubs = va_arg(va, char *);
+        if(*subs != expSubs) {
+            cerr << "split() test failed: split(" << s << ")" << endl;
+            cerr << "Incorrect substring: \"" << *subs << "\", expected \"" << expSubs << "\"" << endl;
+            ++testsFailed;
+            break;
+        }
+    }
+    va_end(va);
 }
 
 int main(int argc, char * argv[])
 {
-    std::map<std::string, std::string> params;
+    configmap_t params;
     params["foo"] = "bar";
     params[""] = "keyless";
     params["valueless"] = "";
@@ -123,14 +158,23 @@ int main(int argc, char * argv[])
     params["complexString"] = "\\1, 2, 3,\n\\4, 5, 6";
     WriteParams("test.cfg", params);
     
-    std::map<std::string, std::string> rparams;
+    configmap_t rparams;
     ReadParams("test.cfg", rparams);
     
-    std::map<std::string, std::string>::const_iterator pitr;
+    configmap_t::const_iterator pitr;
     for(pitr = params.begin(); pitr != params.end(); ++pitr)
         TestValue(pitr->first, pitr->second, rparams);
     
-    cerr << "Tests passed" << endl;
+    
+    TestSplit("a:b:c", ':', 3, "a", "b", "c");
+    TestSplit(":a:b:c:", ':', 5, "", "a", "b", "c", "");
+    TestSplit("abc:def:ghi", ':', 3, "abc", "def", "ghi");
+    TestSplit(":abc:def:ghi:", ':', 5, "", "abc", "def", "ghi", "");
+    TestSplit("", ':', 1, "");
+    TestSplit(":", ':', 2, "", "");
+    
+    
+    cerr << testsFailed << " tests failed" << endl;
     
     return EXIT_SUCCESS;
 }

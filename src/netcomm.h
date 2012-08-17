@@ -434,10 +434,17 @@ class ServerFinder {
     int qport;
     int rport;
   public:
-    ServerFinder(uint8_t * buffer, size_t msgLen, const std::string & a, uint16_t qp, uint16_t rp):
+    ServerFinder(const std::string & a, uint16_t qp, uint16_t rp):
         addr(a),
         qport(qp),
         rport(rp)
+    {
+    }
+    ~ServerFinder() {
+        close(respSock);
+    }
+    
+    void SendQuery(uint8_t * buffer, size_t msgLen)
     {
         // Setup query response socket
         respSock = socket(AF_INET, SOCK_DGRAM, 0);
@@ -478,9 +485,6 @@ class ServerFinder {
                (struct sockaddr *)&bcastAddr, sizeof(bcastAddr));
         
         close(bcastSock);
-    }
-    ~ServerFinder() {
-        close(respSock);
     }
     
     bool Poll(double secs = 0.001)
