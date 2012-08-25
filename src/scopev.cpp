@@ -138,6 +138,25 @@ struct ConnectController {
     GtkWidget * scopeTypeCombo;
 };
 
+
+void GetSupportedDevs(std::set<uint32_t> & VIDPIDs)
+{
+    configmap_t supportedDevs;
+    EntriesWithPrefix(globalConfig, "supportedVID_PID.", supportedDevs);
+    
+    configmap_t::iterator di;
+    for(di = supportedDevs.begin(); di != supportedDevs.end(); ++di)
+    {
+        vector<string> ids;
+        split(di->second, ':', ids);
+        if(ids.size() < 2)
+            continue;
+        uint32_t vid = strtol(ids[0].c_str(), NULL, 16) & 0xFFFF;
+        uint32_t pid = strtol(ids[1].c_str(), NULL, 16) & 0xFFFF;
+        VIDPIDs.insert((vid << 16) | pid);
+    }
+}
+
 void Sig_ConnectDlgResponse(GtkDialog * dlog, gint response, ConnectController * conCtl)
 {
     if(response == GTK_RESPONSE_ACCEPT)
@@ -201,21 +220,8 @@ static void Action_connect(GSimpleAction * action, GVariant * parameter, gpointe
     gtk_combo_box_text_append(GTK_COMBO_BOX_TEXT(conCtl->selectionCombo), "address", "Connect by Address and Serial Number");
     gtk_combo_box_set_active_id(GTK_COMBO_BOX(conCtl->selectionCombo), "address");
     
-    configmap_t supportedDevs;
-    EntriesWithPrefix(globalConfig, "supportedVID_PID.", supportedDevs);
-    
     std::set<uint32_t> VIDPIDs;
-    configmap_t::iterator di;
-    for(di = supportedDevs.begin(); di != supportedDevs.end(); ++di)
-    {
-        vector<string> ids;
-        split(di->second, ':', ids);
-        if(ids.size() < 2)
-            continue;
-        uint32_t vid = strtol(ids[0].c_str(), NULL, 16) & 0xFFFF;
-        uint32_t pid = strtol(ids[1].c_str(), NULL, 16) & 0xFFFF;
-        VIDPIDs.insert((vid << 16) | pid);
-    }
+    GetSupportedDevs(VIDPIDs);
     
     vector<DevIdent> localDevices;
     ListUSB_Devices(VIDPIDs, localDevices);
@@ -255,6 +261,28 @@ static void Action_connect(GSimpleAction * action, GVariant * parameter, gpointe
     gtk_widget_show_all(dlog);
 }
 
+static void Action_connect_first(GSimpleAction * action, GVariant * parameter, gpointer userData)
+{
+    std::set<uint32_t> VIDPIDs;
+    GetSupportedDevs(VIDPIDs);
+    
+    vector<DevIdent> localDevices;
+    ListUSB_Devices(VIDPIDs, localDevices);
+    vector<DevIdent>::iterator ldi;
+    for(ldi = localDevices.begin(); ldi != localDevices.end(); ++ldi)
+    {
+        char bfr[1024];
+        snprintf(bfr, 1024, "USB:%04X:%04X:%s", ldi->vendID, ldi->prodID, ldi->sernum.c_str());
+        char bfr2[1024];
+        snprintf(bfr2, 1024, "USB:%04X:%04X:%s", ldi->vendID, ldi->prodID, ldi->sernum.c_str());
+        
+        model->Connect("USB", ldi->vendID, ldi->prodID, ldi->sernum);
+        DS1k_Controller * ctl = new DS1k_Controller(model, ldi->sernum);
+        gtk_notebook_append_page(GTK_NOTEBOOK(mainCtl->instrumentsNtbk), ctl->layoutGrid, ctl->tabLbl);
+        gtk_widget_show_all(mainCtl->instrumentsWindow);
+    }
+}
+
 //******************************************************************************
 
 static void Action_about(GSimpleAction *action, GVariant *parameter, gpointer userData)
@@ -283,6 +311,7 @@ static void Action_quit(GSimpleAction * action, GVariant * parameter, gpointer u
 
 static GActionEntry appMenuActions[] = {
     {"connect", Action_connect, NULL, NULL, NULL},
+    {"connect-first", Action_connect_first, NULL, NULL, NULL},
     {"save-cfg", Action_save_cfg, NULL, NULL, NULL},
     {"load-cfg", Action_load_cfg, NULL, NULL, NULL},
     // {"save-image", Action_save_image, NULL, NULL, NULL},
@@ -311,18 +340,21 @@ static void startupApp(GApplication * app, gpointer userData)
     
     mb.Reset();
     {MB_Submenu subm(mb, "File");
-        mb.Item("_Connect", "app.connect", "<Primary>k");
+        {MB_Section sect(mb, "");
+            mb.Item("Connect", "app.connect", "<Primary><Shift>k");
+            mb.Item("Connect First Found", "app.connect-first", "<Primary>k");
+        }
         {MB_Section sect(mb, "");
             // mb.Item("_Load Image", "app.load-image");
-            mb.Item("_Load Settings", "app.load-cfg");
-            mb.Item("_Load Rigol Waveform", "app.load-rigol-wfm");
-            mb.Item("_Load Raw Waveform", "app.load-raw-wfm");
+            mb.Item("Load Settings", "app.load-cfg");
+            mb.Item("Load Rigol Waveform", "app.load-rigol-wfm");
+            mb.Item("Load Raw Waveform", "app.load-raw-wfm");
             // mb.Item("_Load Session", "app.load-sess");
         }
         {MB_Section sect(mb, "");
-            mb.Item("_Save Image", "app.save-image");
-            mb.Item("_Save Settings", "app.save-cfg");
-            mb.Item("_Save Waveform", "app.save-wfm");
+            mb.Item("Save Image", "app.save-image");
+            mb.Item("Save Settings", "app.save-cfg");
+            mb.Item("Save Waveform", "app.save-wfm");
             // mb.Item("_Save Session", "app.save-sess");
         }
     }
@@ -333,12 +365,12 @@ static void startupApp(GApplication * app, gpointer userData)
             mb.Item("_Paste", "app.paste", "<Primary>v");
         }
     }
-    {MB_Submenu subm(mb, "_Scope");
-        mb.Item("_Connect", "app.paste");
-        {MB_Section sect(mb, "");
-            mb.Item("_Add Waveform", "app.cut");
-        }
-    }
+    // {MB_Submenu subm(mb, "_Scope");
+    //     mb.Item("_Connect", "app.paste");
+    //     {MB_Section sect(mb, "");
+    //         mb.Item("_Add Waveform", "app.cut");
+    //     }
+    // }
     GMenu * mainMenu = mb.Close();
     
     gtk_application_set_app_menu(GTK_APPLICATION(app), G_MENU_MODEL(appMenu));
