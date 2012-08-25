@@ -232,6 +232,7 @@ TMC_LocalDevice::~TMC_LocalDevice()
 
 size_t TMC_LocalDevice::Write(const uint8_t * msg, size_t len)
 {
+    cerr << "USB: " << string((char *)msg, len) << endl;
     // TODO: multi-transfer writes
     int r;
     // "The total number of bytes in each Bulk-OUT transaction must be a multiple of 4.The Host must add 0

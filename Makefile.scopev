@@ -26,8 +26,11 @@ OBJS = obj/scopev.cpp.o
 OBJS += obj/cfgmap.cpp.o
 OBJS += obj/freetmc_local.cpp.o
 OBJS += obj/freetmc_remote.cpp.o
+OBJS += obj/netcomm.cpp.o
 OBJS += obj/scopev_model.cpp.o
 OBJS += obj/rigol_ds1k.cpp.o
+OBJS += obj/rigol_ds1k_ui.cpp.o
+OBJS += obj/units.cpp.o
 OBJS += obj/selector.cpp.o
 OBJS += obj/plotting.cpp.o
 

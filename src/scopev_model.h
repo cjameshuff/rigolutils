@@ -13,14 +13,18 @@
 #define SCOPEV_MODEL_H
 //******************************************************************************
 
+#include "freetmc_local.h"
 #include "freetmc_remote.h"
 #include "plotting.h"
 #include "rigoltmc.h"
 
+#include "rigol_ds1k.h"
+#include "cfgmap.h"
 #include "selector.h"
 
 #include <iostream>
 #include <string>
+#include <vector>
 #include <map>
 
 #include <stdlib.h>
@@ -46,21 +50,21 @@ struct Channel {
 
 struct Device {
     std::string location;
+    uint16_t vid;
+    uint16_t pid;
     std::string sernum;
-    DS1000E * device;
+    TMC_Device * tmcDevice;
     std::vector<Channel> channels;
     bool connected;
     
-    Device(const std::string & l, const std::string & s);
+    Device(const std::string & l, uint16_t vid, uint16_t pid, const std::string & s);
     ~Device();
-    
-    void Connect();
 };
 
 
 class ScopeModel {
   protected:
-    std::map<sel_t, Device *> devices;
+    std::map<std::string, Device *> devices;
     
   public:
     ScopeModel();
@@ -68,7 +72,22 @@ class ScopeModel {
     
     void Update();
     
+    Device * GetDevice(const std::string & sernum) {return devices[sernum];}
+    
+    
     void Connect(const std::string & l, uint16_t vid, uint16_t pid, const std::string & s);
+};
+
+class ScopeServerFinder: public ServerFinder {
+    std::vector<std::string> servers;
+  public:
+    ScopeServerFinder();
+    
+    std::vector<std::string> & GetServers() {return servers;}
+    
+    void Query(const std::set<uint32_t> & VIDPIDs);
+    
+    virtual bool HandleResponse(uint8_t * buffer, size_t msgLen, sockaddr_in & srcAddr, socklen_t srcAddrLen);
 };
 
 

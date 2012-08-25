@@ -14,6 +14,7 @@ LIBS += `pkg-config --libs libusb-1.0`
 
 OBJS = obj/scopecmd.cpp.o
 OBJS += obj/cfgmap.cpp.o
+OBJS += obj/netcomm.cpp.o
 OBJS += obj/freetmc_local.cpp.o
 OBJS += obj/freetmc_remote.cpp.o
 

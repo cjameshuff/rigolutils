@@ -41,12 +41,13 @@ void Init_RigolDS1K()
         "KEY", "INFO", "COUN", "BEEP"
     };
     string tpc[] = {
-        "TRIG:EDGE", "TRIG:PULS", "TRIG:VIDEO", "TRIG:SLOP", "TRIG:PATT"
+        "TRIG:EDGE", "TRIG:PULS", "TRIG:VIDEO", "TRIG:SLOP", "TRIG:PATT", "TRIG:DUR", "TRIG:ALT"
     };
     ps->mainParamCats.resize(sizeof(pc)/sizeof(string));
     copy(pc, pc + ps->mainParamCats.size(), ps->mainParamCats.begin());
-    ps->trigParamCats.resize(sizeof(pc)/sizeof(string));
-    copy(pc, pc + ps->trigParamCats.size(), ps->trigParamCats.begin());
+    
+    ps->trigParamCats.resize(sizeof(tpc)/sizeof(string));
+    copy(tpc, tpc + ps->trigParamCats.size(), ps->trigParamCats.begin());
     
     ps->DefParam("ACQ", ":ACQ:TYPE?", "AcquireType");
     ps->DefParam("ACQ", ":ACQ:MODE?", "AcquireMode");
@@ -74,7 +75,7 @@ void Init_RigolDS1K()
     ps->DefParam("TRIG", ":TRIG:HOLD?", "TriggerHoldoff");
     ps->DefParam("TRIG", ":TRIG:STAT?", "TriggerStatus");
     
-    // Trigger modes: EDGE, PULS, VIDEO, SLOP, PATT, ALT
+    // Trigger modes: EDGE, PULS, VIDEO, SLOP, PATT, DUR, ALT
     ps->DefParam("TRIG:EDGE", ":TRIG:EDGE:SOUR?", "TriggerSource");
     ps->DefParam("TRIG:EDGE", ":TRIG:EDGE:LEV?", "TriggerLevel");
     ps->DefParam("TRIG:EDGE", ":TRIG:EDGE:SWE?", "TriggerSweep");
@@ -90,29 +91,18 @@ void Init_RigolDS1K()
     ps->DefParam("TRIG:PULS", ":TRIG:PULS:SENS?", "TriggerPulseSensitivity");
     ps->DefParam("TRIG:PULS", ":TRIG:PULS:WIDT?", "TriggerPulseWidth");
     
-        ps->DefParam("TRIG:VIDEO", ":TRIG:VIDEO:SOUR?", "TriggerSource");
-        ps->DefParam("TRIG:VIDEO", ":TRIG:VIDEO:LEV?", "TriggerLevel");
-        ps->DefParam("TRIG:VIDEO", ":TRIG:VIDEO:SWE?", "TriggerSweep");
-        ps->DefParam("TRIG:VIDEO", ":TRIG:VIDEO:COUP?", "TriggerCoupling");
-        // TODO
+    ps->DefParam("TRIG:VIDEO", ":TRIG:VIDEO:SOUR?", "TriggerSource");
+    ps->DefParam("TRIG:VIDEO", ":TRIG:VIDEO:LEV?", "TriggerLevel");
+    // TODO
     
-        ps->DefParam("TRIG:SLOP", ":TRIG:SLOP:SOUR?", "TriggerSource");
-        ps->DefParam("TRIG:SLOP", ":TRIG:SLOP:LEV?", "TriggerLevel");
-        ps->DefParam("TRIG:SLOP", ":TRIG:SLOP:SWE?", "TriggerSweep");
-        ps->DefParam("TRIG:SLOP", ":TRIG:SLOP:COUP?", "TriggerCoupling");
-        // TODO
+    ps->DefParam("TRIG:SLOP", ":TRIG:SLOP:SOUR?", "TriggerSource");
+    ps->DefParam("TRIG:SLOP", ":TRIG:SLOP:SWE?", "TriggerSweep");
+    ps->DefParam("TRIG:SLOP", ":TRIG:SLOP:COUP?", "TriggerCoupling");
+    // TODO
     
-        ps->DefParam("TRIG:PATT", ":TRIG:PATT:SOUR?", "TriggerSource");
-        ps->DefParam("TRIG:PATT", ":TRIG:PATT:LEV?", "TriggerLevel");
-        ps->DefParam("TRIG:PATT", ":TRIG:PATT:SWE?", "TriggerSweep");
-        ps->DefParam("TRIG:PATT", ":TRIG:PATT:COUP?", "TriggerCoupling");
-        // TODO
+    ps->DefParam("TRIG:ALT", ":TRIG:ALT:SOUR?", "");
+    // TODO
     
-        ps->DefParam("TRIG:ALT", ":TRIG:ALT:SOUR?", "TriggerSource");
-        ps->DefParam("TRIG:ALT", ":TRIG:ALT:LEV?", "TriggerLevel");
-        ps->DefParam("TRIG:ALT", ":TRIG:ALT:SWE?", "TriggerSweep");
-        ps->DefParam("TRIG:ALT", ":TRIG:ALT:COUP?", "TriggerCoupling");
-        // TODO
     
     ps->DefParam("MATH", ":MATH:DISP?", "MathDisplay");
     ps->DefParam("MATH", ":MATH:OPER?", "MathOperation");
@@ -121,18 +111,18 @@ void Init_RigolDS1K()
     for(int j = 0; j < 2; ++j)
     {
         string chan(string(":CHAN") + (char)('1' + j));
-        string ch(string("Ch") + (char)('1' + j));
-        ps->mainParamCats.push_back("CHAN" + chan);
-        ps->DefParam(chan, chan + ":BWL?", ch + "_BandwidthLimit");
-        ps->DefParam(chan, chan + ":COUP?", ch + "_Coupling");
-        ps->DefParam(chan, chan + ":DISP?", ch + "_Display");
-        ps->DefParam(chan, chan + ":INV?", ch + "_Invert");
-        ps->DefParam(chan, chan + ":OFFS?", ch + "_Offset");
-        ps->DefParam(chan, chan + ":PROB?", ch + "_Probe");
-        ps->DefParam(chan, chan + ":SCAL?", ch + "_Scale");
-        ps->DefParam(chan, chan + ":FILT?", ch + "_Filter");
-        ps->DefParam(chan, chan + ":MEMD?", ch + "_MemoryDepth");
-        ps->DefParam(chan, chan + ":VERN?", ch + "_Vernier");
+        string ch(string("CHAN") + (char)('1' + j));
+        ps->mainParamCats.push_back(ch);
+        ps->DefParam(ch, chan + ":BWL?", ch + "_BandwidthLimit");
+        ps->DefParam(ch, chan + ":COUP?", ch + "_Coupling");
+        ps->DefParam(ch, chan + ":DISP?", ch + "_Display");
+        ps->DefParam(ch, chan + ":INV?", ch + "_Invert");
+        ps->DefParam(ch, chan + ":OFFS?", ch + "_Offset");
+        ps->DefParam(ch, chan + ":PROB?", ch + "_Probe");
+        ps->DefParam(ch, chan + ":SCAL?", ch + "_Scale");
+        ps->DefParam(ch, chan + ":FILT?", ch + "_Filter");
+        ps->DefParam(ch, chan + ":MEMD?", ch + "_MemoryDepth");
+        ps->DefParam(ch, chan + ":VERN?", ch + "_Vernier");
     }
     
     // ps->DefParam(":MEAS:?", "Measure");
@@ -154,6 +144,12 @@ void Init_RigolDS1K()
     *ps = *paramSets["DS1102E"];
     
     ps->mainParamCats.push_back("LA");
+    
+    ps->DefParam("TRIG:PATT", ":TRIG:PATT:SWE?", "TriggerSweep");
+    // TODO
+    
+    ps->DefParam("TRIG:DUR", ":TRIG:DUR:PATT?", "");
+    // TODO
     
     ps->DefParam("ACQ", ":ACQ:SAMP? DIGITAL", "DigitalSamplingRate");
     ps->DefParam("LA", ":LA:DISP?", "LogicDisplay");
@@ -177,14 +173,38 @@ void Init_RigolDS1K()
 } // Init_RigolDS1K()
 
 
-void GetParams(TMC_Device * device, const map<string, string> & params)
+void GetParams(TMC_Device * device, map<string, string> & params)
 {
     IDN_Response idn = device->Identify();
     ParamSet * ps = GetParamSet(idn.model);
     
-    std::vector<std::string> mainParamCats;
-    std::vector<std::string> trigParamCats;
-    std::map<std::string, std::vector<std::string> > paramNames;
-    std::map<std::string, std::string> niceNames;
+    std::vector<std::string>::iterator pci;
+    std::vector<std::string>::iterator pni;
+    for(pci = ps->mainParamCats.begin(); pci != ps->mainParamCats.end(); ++pci)
+    {
+        std::vector<std::string> & paramNames = ps->paramNames[*pci];
+        for(pni = paramNames.begin(); pni != paramNames.end(); ++pni) {
+            params[*pni] = device->Query(*pni);
+            cerr << *pni << ": " << params[*pni] << endl;
+        }
+    }
+    for(pci = ps->trigParamCats.begin(); pci != ps->trigParamCats.end(); ++pci)
+    {
+        std::vector<std::string> & paramNames = ps->paramNames[*pci];
+        for(pni = paramNames.begin(); pni != paramNames.end(); ++pni) {
+            cerr << *pni << ": ";
+            params[*pni] = device->Query(*pni);
+            cerr << params[*pni] << endl;
+        }
+    }
+    
+    // map<string, string>::iterator pi;
+    // for(pi = params.begin(); pi != params.end(); ++pi)
+    //     cerr << pi->first << ": " << pi->second << endl;
 } // GetParams()
 
+
+void SetParams(TMC_Device * device, const std::map<std::string, std::string> & params)
+{
+    
+}

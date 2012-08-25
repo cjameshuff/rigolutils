@@ -20,17 +20,10 @@
 // 
 //******************************************************************************
 
-
-
-#include "freetmc_local.h"
 #include "scopev_model.h"
-#include "rigol_ds1k.h"
-#include "selector.h"
-#include "cfgmap.h"
+#include "rigol_ds1k_ui.h"
 
-#include <iostream>
-#include <string>
-#include <map>
+#include "units.h"
 
 #include <stdlib.h>
 #include <stdint.h>
@@ -46,6 +39,15 @@
 using namespace std;
 using namespace Magick;
 
+struct MainController {
+    GtkWidget * appWindow;
+    GtkWidget * instrumentsWindow;
+    GtkWidget * instrumentsNtbk;
+};
+
+//******************************************************************************
+
+MainController * mainCtl = NULL;
 ScopeModel * model = NULL;
 GtkApplication * gtkapp = NULL;
 
@@ -58,64 +60,7 @@ void PlotWaveforms(const std::string foutPath, PlotOpts & opts, DS1000E & device
 
 static void startupApp(GApplication * app, gpointer userData);
 static void activateApp(GtkApplication * app, gpointer userData);
-bool UpdateCB(ScopeModel * model);
-
-//******************************************************************************
-class ScopeServerFinder: public ServerFinder {
-    vector<string> servers;
-  public:
-    ScopeServerFinder():
-        ServerFinder(DISC_BCAST_ADDR, DISC_QUERY_PORT, DISC_RESP_PORT)
-    {}
-    
-    vector<string> & GetServers() {return servers;}
-    
-    void Query(const set<uint32_t> & VIDPIDs) {
-        vector<uint8_t> query(PKT_HEADER_SIZE);
-        PKT_SetCMD(query, CMD_PING);
-        PKT_SetSeq(query, 0x55);
-        PKT_SetPayloadSize(query, 0);
-        
-        SendQuery(&query[0], query.size());
-    }
-    
-    virtual bool HandleResponse(uint8_t * buffer, size_t msgLen, sockaddr_in & srcAddr, socklen_t srcAddrLen)
-    {
-        cerr << "msgLen: " << msgLen << endl;
-        
-        if(msgLen < PKT_HEADER_SIZE) {
-            cerr << "Dropped short discovery response (msg size: " << msgLen << ")" << endl;
-            return false;
-        }
-        uint16_t cmd = PKT_CMD(buffer);
-        uint8_t seqnum = PKT_SEQ(buffer);
-        uint8_t seqnum2 = PKT_SEQ2(buffer);
-        uint32_t payloadSize = PKT_PAYLOAD_SIZE(buffer);
-        uint8_t * payload = PKT_PAYLOAD(buffer);
-        
-        if(!PKT_SEQ_GOOD(buffer)) {
-            cerr << "Dropped discovery response with bad sequence number" << endl;
-            return false;
-        }
-        
-        if((payloadSize + PKT_HEADER_SIZE) != msgLen) {
-            cerr << "Dropped discovery response with bad length" << endl;
-            return false;
-        }
-        
-        string response(payload, payload + payloadSize);
-        // char s[INET6_ADDRSTRLEN];
-        // struct sockaddr * sa = (struct sockaddr *)&srcAddr;
-        // if(sa->sa_family == AF_INET)
-        //     inet_ntop(sa->sa_family, &(((struct sockaddr_in *)sa)->sin_addr), s, INET6_ADDRSTRLEN);
-        // else
-        //     inet_ntop(sa->sa_family, &(((struct sockaddr_in6 *)sa)->sin6_addr), s, INET6_ADDRSTRLEN);
-        // cerr << "Found server \"" << response << "\" at " << s << endl;
-        servers.push_back(response);
-        return true;
-    }
-};
-
+bool UpdateCB(GtkWidget * window);
 
 //******************************************************************************
 void ExitCleanup()
@@ -132,6 +77,7 @@ int main(int argc, char * argv[])
     globalConfig["discAddr_v4"] = "225.0.0.50";
     globalConfig["supportedVID_PID.DS1102E"] = "1AB1:0588";
     
+    units::InitUnits();
     InitializeMagick(*argv);
     
     int r = libusb_init(NULL);
@@ -153,8 +99,9 @@ int main(int argc, char * argv[])
     }
     
     gtkapp = gtk_application_new("org.cjameshuff.scopev", G_APPLICATION_FLAGS_NONE);
-    g_signal_connect(gtkapp, "startup", G_CALLBACK(startupApp), NULL);
-    g_signal_connect(gtkapp, "activate", G_CALLBACK(activateApp), NULL);
+    mainCtl = new MainController;
+    g_signal_connect(gtkapp, "startup", G_CALLBACK(startupApp), mainCtl);
+    g_signal_connect(gtkapp, "activate", G_CALLBACK(activateApp), mainCtl);
     g_set_application_name("ScopeView");
     
     int status = g_application_run(G_APPLICATION(gtkapp), argc, argv);
@@ -184,20 +131,22 @@ static void Action_save_cfg(GSimpleAction * action, GVariant * parameter, gpoint
 }
 
 //******************************************************************************
+struct ConnectController {
+    GtkWidget * selectionCombo;
+    GtkWidget * addrEntry;
+    GtkWidget * sernumEntry;
+    GtkWidget * scopeTypeCombo;
+};
 
-void ConnectDlgResponse(GtkDialog * dlog, gint response, gpointer userData)
+void Sig_ConnectDlgResponse(GtkDialog * dlog, gint response, ConnectController * conCtl)
 {
-    WidgetDict * wdict = (WidgetDict*)userData;
     if(response == GTK_RESPONSE_ACCEPT)
     {
-        GtkWidget * selectionCombo = wdict->Get("selection");
-        GtkWidget * addrEntry = wdict->Get("addrEntry");
-        GtkWidget * sernumEntry = wdict->Get("sernumEntry");
         string addr, sernum;
         uint16_t vid = 0xFFFF;
         uint16_t pid = 0xFFFF;
         
-        const gchar * selection = gtk_combo_box_get_active_id(GTK_COMBO_BOX(selectionCombo));
+        const gchar * selection = gtk_combo_box_get_active_id(GTK_COMBO_BOX(conCtl->selectionCombo));
         if(!selection || strcmp(selection, "address") == 0)
             printf("Manual connection\n");
         else
@@ -214,8 +163,8 @@ void ConnectDlgResponse(GtkDialog * dlog, gint response, gpointer userData)
         }
         else
         {
-            addr = gtk_entry_get_text(GTK_ENTRY(addrEntry));
-            sernum = gtk_entry_get_text(GTK_ENTRY(sernumEntry));
+            addr = gtk_entry_get_text(GTK_ENTRY(conCtl->addrEntry));
+            sernum = gtk_entry_get_text(GTK_ENTRY(conCtl->sernumEntry));
         }
         printf("Connecting to %s", sernum.c_str());
         if(addr == "" || addr == "USB")
@@ -224,30 +173,33 @@ void ConnectDlgResponse(GtkDialog * dlog, gint response, gpointer userData)
             printf(" at %s\n", addr.c_str());
         
         model->Connect(addr, vid, pid, sernum);
+        DS1k_Controller * ctl = new DS1k_Controller(model, sernum);
+        gtk_notebook_append_page(GTK_NOTEBOOK(mainCtl->instrumentsNtbk), ctl->layoutGrid, ctl->tabLbl);
+        gtk_widget_show_all(mainCtl->instrumentsWindow);
     }
     else {
         printf("response: %d\n", response);
     }
-    delete wdict;
+    delete conCtl;
     gtk_widget_destroy(GTK_WIDGET(dlog));
 }
 
 static void Action_connect(GSimpleAction * action, GVariant * parameter, gpointer userData)
 {
-    WidgetDict * wdict = new WidgetDict;
+    ConnectController * conCtl = new ConnectController;
     GtkWidget * window = NULL;//(GtkWidget *)userData;
     GtkWidget * dlog = gtk_dialog_new_with_buttons("Connect", GTK_WINDOW(window),
         (GtkDialogFlags)(GTK_DIALOG_MODAL | GTK_DIALOG_DESTROY_WITH_PARENT),
         GTK_STOCK_CANCEL, GTK_RESPONSE_CANCEL,
         GTK_STOCK_CONNECT, GTK_RESPONSE_ACCEPT,
         NULL);
-    g_signal_connect(dlog, "response", G_CALLBACK(ConnectDlgResponse), wdict);
+    g_signal_connect(dlog, "response", G_CALLBACK(Sig_ConnectDlgResponse), conCtl);
     
     GtkWidget * content = gtk_dialog_get_content_area(GTK_DIALOG(dlog));
     
-    GtkWidget * selectionCombo = gtk_combo_box_text_new();
-    gtk_combo_box_text_append(GTK_COMBO_BOX_TEXT(selectionCombo), "address", "Connect by Address and Serial Number");
-    gtk_combo_box_set_active_id(GTK_COMBO_BOX(selectionCombo), "address");
+    conCtl->selectionCombo = gtk_combo_box_text_new();
+    gtk_combo_box_text_append(GTK_COMBO_BOX_TEXT(conCtl->selectionCombo), "address", "Connect by Address and Serial Number");
+    gtk_combo_box_set_active_id(GTK_COMBO_BOX(conCtl->selectionCombo), "address");
     
     configmap_t supportedDevs;
     EntriesWithPrefix(globalConfig, "supportedVID_PID.", supportedDevs);
@@ -274,11 +226,11 @@ static void Action_connect(GSimpleAction * action, GVariant * parameter, gpointe
         snprintf(bfr, 1024, "USB:%04X:%04X:%s", ldi->vendID, ldi->prodID, ldi->sernum.c_str());
         char bfr2[1024];
         snprintf(bfr2, 1024, "USB:%04X:%04X:%s", ldi->vendID, ldi->prodID, ldi->sernum.c_str());
-        gtk_combo_box_text_append(GTK_COMBO_BOX_TEXT(selectionCombo), bfr, bfr2);
+        gtk_combo_box_text_append(GTK_COMBO_BOX_TEXT(conCtl->selectionCombo), bfr, bfr2);
     }
     
-    GtkWidget * scopeTypeCombo = gtk_combo_box_text_new();
-    gtk_combo_box_text_append(GTK_COMBO_BOX_TEXT(scopeTypeCombo), "DS1102E", "DS1102E");
+    conCtl->scopeTypeCombo = gtk_combo_box_text_new();
+    gtk_combo_box_text_append(GTK_COMBO_BOX_TEXT(conCtl->scopeTypeCombo), "DS1102E", "DS1102E");
     
     // ScopeServerFinder finder;
     // finder.SendQuery(VIDPIDs);
@@ -286,24 +238,19 @@ static void Action_connect(GSimpleAction * action, GVariant * parameter, gpointe
     
     
     GtkWidget * addrLabel = gtk_label_new("Address (leave blank for USB):");
-    GtkWidget * addrEntry = gtk_entry_new();
+    conCtl->addrEntry = gtk_entry_new();
     GtkWidget * sernumLabel = gtk_label_new("Serial Number:");
-    GtkWidget * sernumEntry = gtk_entry_new();
-    gtk_entry_set_max_length(GTK_ENTRY(addrEntry), 24);
-    gtk_entry_set_max_length(GTK_ENTRY(sernumEntry), 24);
+    conCtl->sernumEntry = gtk_entry_new();
+    gtk_entry_set_max_length(GTK_ENTRY(conCtl->addrEntry), 24);
+    gtk_entry_set_max_length(GTK_ENTRY(conCtl->sernumEntry), 24);
     
-    gtk_container_add(GTK_CONTAINER(content), selectionCombo);
+    gtk_container_add(GTK_CONTAINER(content), conCtl->selectionCombo);
     gtk_container_add(GTK_CONTAINER(content), gtk_separator_new(GTK_ORIENTATION_HORIZONTAL));
-    gtk_container_add(GTK_CONTAINER(content), scopeTypeCombo);
+    gtk_container_add(GTK_CONTAINER(content), conCtl->scopeTypeCombo);
     gtk_container_add(GTK_CONTAINER(content), addrLabel);
-    gtk_container_add(GTK_CONTAINER(content), addrEntry);
+    gtk_container_add(GTK_CONTAINER(content), conCtl->addrEntry);
     gtk_container_add(GTK_CONTAINER(content), sernumLabel);
-    gtk_container_add(GTK_CONTAINER(content), sernumEntry);
-    
-    wdict->Add("addrEntry", addrEntry);
-    wdict->Add("sernumEntry", sernumEntry);
-    wdict->Add("selection", selectionCombo);
-    wdict->Add("scopeType", scopeTypeCombo);
+    gtk_container_add(GTK_CONTAINER(content), conCtl->sernumEntry);
     
     gtk_widget_show_all(dlog);
 }
@@ -401,33 +348,57 @@ static void startupApp(GApplication * app, gpointer userData)
 } // startupApp()
 //******************************************************************************
 
+
 static void activateApp(GtkApplication * app, gpointer userData)
 {
-    GtkWidget * window = gtk_application_window_new(app);
-    gtk_window_set_title(GTK_WINDOW(window), "GTK Scratch");
-    gtk_window_set_default_size(GTK_WINDOW(window), 768, 640);
-    gtk_container_set_border_width(GTK_CONTAINER(window), 20);
+    GtkWidget * appWindow = gtk_application_window_new(app);
+    mainCtl->appWindow = appWindow;
+    gtk_window_set_title(GTK_WINDOW(appWindow), "Waveforms");
+    gtk_window_set_default_size(GTK_WINDOW(appWindow), 768, 640);
+    gtk_container_set_border_width(GTK_CONTAINER(appWindow), 20);
     
     GtkWidget * waveformView = gtk_image_new();
-    gtk_image_set_from_file(GTK_IMAGE(waveformView), "NewFile4.wfm.png");
+    gtk_image_set_from_file(GTK_IMAGE(waveformView), "data/NewFile4.wfm.png");
     
     GtkWidget * scrollView = gtk_scrolled_window_new(NULL, NULL);
-    gtk_container_add(GTK_CONTAINER(window), scrollView);
+    gtk_container_add(GTK_CONTAINER(appWindow), scrollView);
     gtk_scrolled_window_add_with_viewport(GTK_SCROLLED_WINDOW(scrollView), waveformView);
     
-    gtk_widget_show_all(window);
     
-    // g_timeout_add(33, (GSourceFunc)UpdateCB, window);
+    GtkWidget * instrumentsWindow = gtk_application_window_new(app);
+    mainCtl->instrumentsWindow = instrumentsWindow;
+    gtk_window_set_title(GTK_WINDOW(instrumentsWindow), "Instruments");
+    // gtk_window_set_default_size(GTK_WINDOW(instrumentsWindow), 512, 384);
+    gtk_window_set_gravity(GTK_WINDOW(instrumentsWindow), GDK_GRAVITY_NORTH_EAST);
+    gtk_window_move(GTK_WINDOW(instrumentsWindow), gdk_screen_width() - 512, 0);
+    gtk_container_set_border_width(GTK_CONTAINER(instrumentsWindow), 20);
+    
+    GtkWidget * instrumentsNtbk = gtk_notebook_new();
+    gtk_notebook_set_show_tabs(GTK_NOTEBOOK(instrumentsNtbk), true);
+    gtk_notebook_set_show_border(GTK_NOTEBOOK(instrumentsNtbk), true);
+    mainCtl->instrumentsNtbk = instrumentsNtbk;
+    
+    // DS1k_Controller * ctl = new DS1k_Controller(model, "123456789B");
+    // gtk_notebook_append_page(GTK_NOTEBOOK(instrumentsNtbk), ctl->layoutGrid, ctl->tabLbl);
+    
+    gtk_container_add(GTK_CONTAINER(instrumentsWindow), instrumentsNtbk);
+    
+    // gtk_widget_show_all(instrumentsWindow);// Not shown until first connection is done
+    gtk_widget_show_all(appWindow);
+    
+    g_timeout_add(33, (GSourceFunc)UpdateCB, NULL);
 } // activateApp()
+
 //******************************************************************************
 
-bool UpdateCB(ScopeModel * model)
+bool UpdateCB(GtkWidget * window)
 {
     model->Update();
     return true;
 }
+//******************************************************************************
 
-void Display()
+/*void Display()
 {
     Image image = Image(Geometry(1024, 512), "white");
     int width = image.columns(), height = image.rows();
@@ -517,5 +488,5 @@ void PlotWaveforms(const std::string foutPath, PlotOpts & opts, DS1000E & scope)
     
     image.draw(drawList);
     image.write(std::string(foutPath));
-}
+}*/
 

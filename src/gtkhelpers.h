@@ -5,10 +5,12 @@
 #include <gtk/gtk.h>
 #include <string>
 #include <stack>
+#include <map>
+#include <stdarg.h>
 
 
 //******************************************************************************
-std::string OpenFileDlg(GtkWidget * window)
+inline std::string OpenFileDlg(GtkWidget * window)
 {
     std::string path;
     GtkWidget * dialog = gtk_file_chooser_dialog_new("Open File", GTK_WINDOW(window),
@@ -28,7 +30,7 @@ std::string OpenFileDlg(GtkWidget * window)
 }
 
 
-std::string SaveFileDlg(GtkWidget * window, const std::string & existPath = "")
+inline std::string SaveFileDlg(GtkWidget * window, const std::string & existPath = "")
 {
     std::string path;
     GtkWidget * dialog = gtk_file_chooser_dialog_new("Save File", GTK_WINDOW(window),
@@ -75,6 +77,45 @@ class WidgetDict {
     }
 };
 
+//******************************************************************************
+
+class ComboBuilder {
+    GtkWidget * comboBox;
+  public:
+    ComboBuilder() {Reset();}
+    
+    void Reset() {comboBox = gtk_combo_box_text_new();}
+    
+    void Item(const char * ident, const char * label) {
+        gtk_combo_box_text_append(GTK_COMBO_BOX_TEXT(comboBox), ident, label);
+    }
+    void Default(const char * ident) {
+        gtk_combo_box_set_active_id(GTK_COMBO_BOX(comboBox), ident);
+    }
+    
+    GtkWidget * Close() {return comboBox;}
+};
+
+inline GtkWidget * ComboBoxText(const char * def, ...)
+{
+    GtkWidget * comboBox = gtk_combo_box_text_new();
+    va_list va;
+    va_start(va, def);
+    char * ent = va_arg(va, char *);
+    while(ent)
+    {
+        char * ident = ent;
+        ent = va_arg(va, char *);
+        if(ent) {
+            gtk_combo_box_text_append(GTK_COMBO_BOX_TEXT(comboBox), ident, ent);
+            ent = va_arg(va, char *);
+        }
+    }
+    va_end(va);
+    if(def)
+        gtk_combo_box_set_active_id(GTK_COMBO_BOX(comboBox), def);
+    return comboBox;
+}
 
 //******************************************************************************
 
