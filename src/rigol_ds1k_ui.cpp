@@ -9,6 +9,7 @@
 using namespace std;
 
 //******************************************************************************
+#define READBACK_DELAY()  usleep(20000)
 
 //==============================================================================
 // Channel controls
@@ -70,13 +71,15 @@ void Sig_ChannelOffsetChanged(GtkSpinButton * spinBtn, ScopeChanCtlPane * contro
     controller->controller->device->tmcDevice->CmdF(":CHAN%d:OFFS %f", controller->channel + 1, val);
     
     // Readback actual level set
+    READBACK_DELAY();
     controller->controller->MuteControls();
     string newVal = controller->controller->device->tmcDevice->QueryF(":CHAN%d:OFFS?", controller->channel + 1);
-    controller->controller->chan[controller->channel]->offsetSISB->SetValue(strtod(newVal.c_str(), NULL));
+    controller->offsetSISB->SetValue(strtod(newVal.c_str(), NULL));
     controller->controller->UnmuteControls();
 }
 
 void Sig_ChannelScaleChanged(GtkSpinButton * spinBtn, ScopeChanCtlPane * controller) {
+    printf("-> Sig_ChannelScaleChanged\n");
     if(controller->controller->ControlsMuted())
         return;
     
@@ -85,9 +88,10 @@ void Sig_ChannelScaleChanged(GtkSpinButton * spinBtn, ScopeChanCtlPane * control
     controller->controller->device->tmcDevice->CmdF(":CHAN%d:SCAL %f", controller->channel + 1, val);
     
     // Readback actual level set
+    READBACK_DELAY();
     controller->controller->MuteControls();
     string newVal = controller->controller->device->tmcDevice->QueryF(":CHAN%d:SCAL?", controller->channel + 1);
-    controller->controller->chan[controller->channel]->scaleSISB->SetValue(strtod(newVal.c_str(), NULL));
+    controller->scaleSISB->SetValue(strtod(newVal.c_str(), NULL));
     controller->controller->UnmuteControls();
 }
 
@@ -194,6 +198,7 @@ void Sig_HOffChanged(GtkSpinButton * spinBtn, DS1k_Controller * controller) {
     controller->device->tmcDevice->CmdF(":TRIG:HOLD %f", val);
     
     // Readback actual level set
+    READBACK_DELAY();
     controller->MuteControls();
     string newVal = controller->device->tmcDevice->QueryF(":TRIG:HOLD?");
     controller->trigCtl->hoffSISB->SetValue(strtod(newVal.c_str(), NULL));
@@ -280,6 +285,7 @@ void Sig_EdgeTrigLevelChanged(GtkSpinButton * spinBtn, DS1k_Controller * control
     controller->device->tmcDevice->CmdF(":TRIG:EDGE:LEV %f", val);
     
     // Readback actual level set
+    READBACK_DELAY();
     controller->MuteControls();
     string newLevel = controller->device->tmcDevice->Query(":TRIG:EDGE:LEV?");
     controller->trigCtl->edgeTrigLevelSISB->SetValue(strtod(newLevel.c_str(), NULL));
@@ -559,6 +565,7 @@ void Sig_TimebaseOffsetChanged(GtkSpinButton * spinBtn, DS1k_Controller * contro
     controller->device->tmcDevice->CmdF(":TIM:OFFS %f", val);
     
     // Readback actual level set
+    READBACK_DELAY();
     controller->MuteControls();
     string newVal = controller->device->tmcDevice->QueryF(":TIM:OFFS?");
     controller->timebaseOffsetSISB->SetValue(strtod(newVal.c_str(), NULL));
@@ -574,6 +581,7 @@ void Sig_TimebaseScaleChanged(GtkSpinButton * spinBtn, DS1k_Controller * control
     controller->device->tmcDevice->CmdF(":TIM:SCAL %f", val);
     
     // Readback actual level set
+    READBACK_DELAY();
     controller->MuteControls();
     string newVal = controller->device->tmcDevice->QueryF(":TIM:SCAL?");
     controller->timebaseScaleSISB->SetValue(strtod(newVal.c_str(), NULL));

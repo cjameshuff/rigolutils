@@ -100,6 +100,13 @@ class SI_SpinButton {
     }
     
     void SetValue(gdouble val) {gtk_spin_button_set_value(spinBtn, val);}
+    
+    void SilentSetValue(gdouble val) {
+        g_signal_handlers_block_by_func((gpointer)spinBtn, (gpointer)Sig_Changed, (gpointer)this);
+        gtk_spin_button_set_value(spinBtn, val);
+        g_signal_handlers_unblock_by_func((gpointer)spinBtn, (gpointer)Sig_Changed, (gpointer)this);
+    }
+    
     gdouble GetValue() {
         GtkAdjustment * adjustment = gtk_spin_button_get_adjustment(spinBtn);
         return gtk_adjustment_get_value(adjustment);
@@ -205,7 +212,7 @@ struct DS1k_Controller {
     // (used to suppress spurious commands when syncing the UI)
     void MuteControls() {++controlsMuted;}
     void UnmuteControls() {--controlsMuted;}
-    bool ControlsMuted() {return controlsMuted > 0;}
+    bool ControlsMuted() {return controlsMuted != 0;}
 };
 
 //******************************************************************************
