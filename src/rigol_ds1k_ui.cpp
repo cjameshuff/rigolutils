@@ -15,60 +15,80 @@ using namespace std;
 //==============================================================================
 
 void Sig_ChannelProbeCoupSelChanged(GtkComboBox * widget, ScopeChanCtlPane * controller) {
-    if(!(controller->controller->device))
+    if(controller->controller->ControlsMuted())
         return;
+    
     const gchar * selection = gtk_combo_box_get_active_id(GTK_COMBO_BOX(widget));
-    controller->controller->device->tmcDevice->CmdF(":CHAN%d:COUP %s", controller->channel, selection);
+    controller->controller->device->tmcDevice->CmdF(":CHAN%d:COUP %s", controller->channel + 1, selection);
 }
 
 void Sig_ChannelProbeSelChanged(GtkComboBox * widget, ScopeChanCtlPane * controller) {
-    if(!(controller->controller->device))
+    if(controller->controller->ControlsMuted())
         return;
+    
     const gchar * selection = gtk_combo_box_get_active_id(GTK_COMBO_BOX(widget));
-    controller->controller->device->tmcDevice->CmdF(":CHAN%d:PROB %s", controller->channel, selection);
+    controller->controller->device->tmcDevice->CmdF(":CHAN%d:PROB %s", controller->channel + 1, selection);
 }
 
 void Sig_ChannelEnabledToggled(GtkToggleButton * btn, ScopeChanCtlPane * controller) {
-    if(!(controller->controller->device))
+    if(controller->controller->ControlsMuted())
         return;
+    
     if(gtk_toggle_button_get_active(btn))
-        controller->controller->device->tmcDevice->CmdF(":CHAN%d:DISP ON", controller->channel);
+        controller->controller->device->tmcDevice->CmdF(":CHAN%d:DISP ON", controller->channel + 1);
     else
-        controller->controller->device->tmcDevice->CmdF(":CHAN%d:DISP OFF", controller->channel);
+        controller->controller->device->tmcDevice->CmdF(":CHAN%d:DISP OFF", controller->channel + 1);
 }
 
 void Sig_ChannelFilterToggled(GtkToggleButton * btn, ScopeChanCtlPane * controller) {
-    if(!(controller->controller->device))
+    if(controller->controller->ControlsMuted())
         return;
+    
     if(gtk_toggle_button_get_active(btn))
-        controller->controller->device->tmcDevice->CmdF(":CHAN%d:FILT ON", controller->channel);
+        controller->controller->device->tmcDevice->CmdF(":CHAN%d:FILT ON", controller->channel + 1);
     else
-        controller->controller->device->tmcDevice->CmdF(":CHAN%d:FILT OFF", controller->channel);
+        controller->controller->device->tmcDevice->CmdF(":CHAN%d:FILT OFF", controller->channel + 1);
 }
 
 void Sig_ChannelBWLimitToggled(GtkToggleButton * btn, ScopeChanCtlPane * controller) {
-    if(!(controller->controller->device))
+    if(controller->controller->ControlsMuted())
         return;
+    
     if(gtk_toggle_button_get_active(btn))
-        controller->controller->device->tmcDevice->CmdF(":CHAN%d:BWL ON", controller->channel);
+        controller->controller->device->tmcDevice->CmdF(":CHAN%d:BWL ON", controller->channel + 1);
     else
-        controller->controller->device->tmcDevice->CmdF(":CHAN%d:BWL OFF", controller->channel);
+        controller->controller->device->tmcDevice->CmdF(":CHAN%d:BWL OFF", controller->channel + 1);
 }
 
 
 void Sig_ChannelOffsetChanged(GtkSpinButton * spinBtn, ScopeChanCtlPane * controller) {
-    if(!(controller->controller->device))
+    if(controller->controller->ControlsMuted())
         return;
+    
     GtkAdjustment * adjustment = gtk_spin_button_get_adjustment(GTK_SPIN_BUTTON(spinBtn));
     gdouble val = gtk_adjustment_get_value(adjustment);
-    controller->controller->device->tmcDevice->CmdF(":CHAN%d:OFFS %f", controller->channel, val);
+    controller->controller->device->tmcDevice->CmdF(":CHAN%d:OFFS %f", controller->channel + 1, val);
+    
+    // Readback actual level set
+    controller->controller->MuteControls();
+    string newVal = controller->controller->device->tmcDevice->QueryF(":CHAN%d:OFFS?", controller->channel + 1);
+    controller->controller->chan[controller->channel]->offsetSISB->SetValue(strtod(newVal.c_str(), NULL));
+    controller->controller->UnmuteControls();
 }
+
 void Sig_ChannelScaleChanged(GtkSpinButton * spinBtn, ScopeChanCtlPane * controller) {
-    if(!(controller->controller->device))
+    if(controller->controller->ControlsMuted())
         return;
+    
     GtkAdjustment * adjustment = gtk_spin_button_get_adjustment(GTK_SPIN_BUTTON(spinBtn));
     gdouble val = gtk_adjustment_get_value(adjustment);
-    controller->controller->device->tmcDevice->CmdF(":CHAN%d:SCAL %f", controller->channel, val);
+    controller->controller->device->tmcDevice->CmdF(":CHAN%d:SCAL %f", controller->channel + 1, val);
+    
+    // Readback actual level set
+    controller->controller->MuteControls();
+    string newVal = controller->controller->device->tmcDevice->QueryF(":CHAN%d:SCAL?", controller->channel + 1);
+    controller->controller->chan[controller->channel]->scaleSISB->SetValue(strtod(newVal.c_str(), NULL));
+    controller->controller->UnmuteControls();
 }
 
 
@@ -151,24 +171,33 @@ void SetVisibleTrigMode(DS1k_Controller * controller)
 void Sig_TrigModeChanged(GtkComboBox * widget, DS1k_Controller * controller)
 {
     SetVisibleTrigMode(controller);
-    if(!(controller->device))
+    if(controller->ControlsMuted())
         return;
+    
     const gchar * selection = gtk_combo_box_get_active_id(GTK_COMBO_BOX(controller->trigCtl->modeSel));
     controller->device->tmcDevice->CmdF(":TRIG:MODE %s", selection);
 }
 
 void Sig_ForceClicked(GtkButton * btn, DS1k_Controller * controller) {
-    if(!(controller->device))
+    if(controller->ControlsMuted())
         return;
+    
     controller->device->tmcDevice->CmdF(":FORC");
 }
 
 void Sig_HOffChanged(GtkSpinButton * spinBtn, DS1k_Controller * controller) {
-    if(!(controller->device))
+    if(controller->ControlsMuted())
         return;
+    
     GtkAdjustment * adjustment = gtk_spin_button_get_adjustment(GTK_SPIN_BUTTON(spinBtn));
     gdouble val = gtk_adjustment_get_value(adjustment);
     controller->device->tmcDevice->CmdF(":TRIG:HOLD %f", val);
+    
+    // Readback actual level set
+    controller->MuteControls();
+    string newVal = controller->device->tmcDevice->QueryF(":TRIG:HOLD?");
+    controller->trigCtl->hoffSISB->SetValue(strtod(newVal.c_str(), NULL));
+    controller->UnmuteControls();
 }
 
 
@@ -235,56 +264,65 @@ DS1k_TriggerCtlPane::DS1k_TriggerCtlPane(DS1k_Controller * scp):
 // TODO:
 // valid range of level depends on vertical scale of source
 void Sig_EdgeTrigSourceSelChanged(GtkComboBox * widget, DS1k_Controller * controller) {
-    if(!(controller->device))
+    if(controller->ControlsMuted())
         return;
+    
     const gchar * selection = gtk_combo_box_get_active_id(GTK_COMBO_BOX(widget));
     controller->device->tmcDevice->CmdF(":TRIG:EDGE:SOUR %s", selection);
 }
 
 void Sig_EdgeTrigLevelChanged(GtkSpinButton * spinBtn, DS1k_Controller * controller) {
-    if(!(controller->device))
+    if(controller->ControlsMuted())
         return;
+    
     GtkAdjustment * adjustment = gtk_spin_button_get_adjustment(GTK_SPIN_BUTTON(spinBtn));
     gdouble val = gtk_adjustment_get_value(adjustment);
     controller->device->tmcDevice->CmdF(":TRIG:EDGE:LEV %f", val);
     
     // Readback actual level set
+    controller->MuteControls();
     string newLevel = controller->device->tmcDevice->Query(":TRIG:EDGE:LEV?");
     controller->trigCtl->edgeTrigLevelSISB->SetValue(strtod(newLevel.c_str(), NULL));
+    controller->UnmuteControls();
 }
 
 void Sig_EdgeTrig50pctClicked(GtkButton * btn, DS1k_Controller * controller) {
-    if(!(controller->device))
+    if(controller->ControlsMuted())
         return;
+    
     controller->device->tmcDevice->CmdF(":Trig%%50");
     string newLevel = controller->device->tmcDevice->Query(":TRIG:EDGE:LEV?");
     controller->trigCtl->edgeTrigLevelSISB->SetValue(strtod(newLevel.c_str(), NULL));
 }
 
 void Sig_EdgeTrigSweepSelChanged(GtkComboBox * widget, DS1k_Controller * controller) {
-    if(!(controller->device))
+    if(controller->ControlsMuted())
         return;
+    
     const gchar * selection = gtk_combo_box_get_active_id(GTK_COMBO_BOX(widget));
     controller->device->tmcDevice->CmdF(":TRIG:EDGE:SWE %s", selection);
 }
 
 void Sig_EdgeTrigCoupSelChanged(GtkComboBox * widget, DS1k_Controller * controller) {
-    if(!(controller->device))
+    if(controller->ControlsMuted())
         return;
+    
     const gchar * selection = gtk_combo_box_get_active_id(GTK_COMBO_BOX(widget));
     controller->device->tmcDevice->CmdF(":TRIG:EDGE:COUP %s", selection);
 }
 
 void Sig_EdgeTrigSlopeSelChanged(GtkComboBox * widget, DS1k_Controller * controller) {
-    if(!(controller->device))
+    if(controller->ControlsMuted())
         return;
+    
     const gchar * selection = gtk_combo_box_get_active_id(GTK_COMBO_BOX(widget));
     controller->device->tmcDevice->CmdF(":TRIG:EDGE:SLOP %s", selection);
 }
 
 void Sig_EdgeTrigSensChanged(GtkRange * range, DS1k_Controller * controller) {
-    if(!(controller->device))
+    if(controller->ControlsMuted())
         return;
+    
     gdouble val = gtk_range_get_value(range);
     controller->device->tmcDevice->CmdF(":TRIG:EDGE:SENS %f", val);
 }
@@ -465,7 +503,7 @@ void Sig_SetNameClicked(GtkButton * btn, DS1k_Controller * controller) {
 }
 
 void Sig_DumpCfgClicked(GtkButton * btn, DS1k_Controller * controller) {
-    if(!(controller->device))
+    if(controller->ControlsMuted())
         return;
     
     std::map<std::string, std::string> params;
@@ -477,15 +515,16 @@ void Sig_DumpCfgClicked(GtkButton * btn, DS1k_Controller * controller) {
 }
 
 void Sig_LoadCfgClicked(GtkButton * btn, DS1k_Controller * controller) {
-    if(!(controller->device))
+    if(controller->ControlsMuted())
         return;
+    
     
     
     // SetParams(params);
 }
 
 void Sig_KeyLockToggled(GtkToggleButton * btn, DS1k_Controller * controller) {
-    if(!(controller->device))
+    if(controller->ControlsMuted())
         return;
     
     if(gtk_toggle_button_get_active(btn))
@@ -495,7 +534,7 @@ void Sig_KeyLockToggled(GtkToggleButton * btn, DS1k_Controller * controller) {
 }
 
 void Sig_RunToggled(GtkToggleButton * btn, DS1k_Controller * controller) {
-    if(!(controller->device))
+    if(controller->ControlsMuted())
         return;
     
     if(gtk_toggle_button_get_active(btn))
@@ -512,20 +551,33 @@ void Sig_AutoClicked(GtkButton * btn, DS1k_Controller * controller) {
 }
 
 void Sig_TimebaseOffsetChanged(GtkSpinButton * spinBtn, DS1k_Controller * controller) {
-    if(!(controller->device))
+    if(controller->ControlsMuted())
         return;
     
     GtkAdjustment * adjustment = gtk_spin_button_get_adjustment(GTK_SPIN_BUTTON(spinBtn));
     gdouble val = gtk_adjustment_get_value(adjustment);
     controller->device->tmcDevice->CmdF(":TIM:OFFS %f", val);
+    
+    // Readback actual level set
+    controller->MuteControls();
+    string newVal = controller->device->tmcDevice->QueryF(":TIM:OFFS?");
+    controller->timebaseOffsetSISB->SetValue(strtod(newVal.c_str(), NULL));
+    controller->UnmuteControls();
 }
+
 void Sig_TimebaseScaleChanged(GtkSpinButton * spinBtn, DS1k_Controller * controller) {
-    if(!(controller->device))
+    if(controller->ControlsMuted())
         return;
     
     GtkAdjustment * adjustment = gtk_spin_button_get_adjustment(GTK_SPIN_BUTTON(spinBtn));
     gdouble val = gtk_adjustment_get_value(adjustment);
     controller->device->tmcDevice->CmdF(":TIM:SCAL %f", val);
+    
+    // Readback actual level set
+    controller->MuteControls();
+    string newVal = controller->device->tmcDevice->QueryF(":TIM:SCAL?");
+    controller->timebaseScaleSISB->SetValue(strtod(newVal.c_str(), NULL));
+    controller->UnmuteControls();
 }
 
 // TODO: Timebase offset/scale range depend on mode:
@@ -538,19 +590,47 @@ void Sig_TimebaseScaleChanged(GtkSpinButton * spinBtn, DS1k_Controller * control
 // ROLL offset: +- 6*scale
 
 void Sig_TimebaseFormatSelChanged(GtkComboBox * widget, DS1k_Controller * controller) {
-    if(!(controller->device))
+    if(controller->ControlsMuted())
         return;
     
     const gchar * selection = gtk_combo_box_get_active_id(GTK_COMBO_BOX(widget));
     controller->device->tmcDevice->CmdF(":TIM:FORM %s", selection);
 }
 
+void Sig_AcqTypeSelChanged(GtkComboBox * widget, DS1k_Controller * controller) {
+    if(controller->ControlsMuted())
+        return;
+    
+    const gchar * selection = gtk_combo_box_get_active_id(GTK_COMBO_BOX(widget));
+    controller->device->tmcDevice->CmdF(":ACQ:TYPE %s", selection);
+}
+
+void Sig_AcqModeSelChanged(GtkComboBox * widget, DS1k_Controller * controller) {
+    if(controller->ControlsMuted())
+        return;
+    
+    const gchar * selection = gtk_combo_box_get_active_id(GTK_COMBO_BOX(widget));
+    controller->device->tmcDevice->CmdF(":ACQ:MODE %s", selection);
+}
+
+void Sig_AcqAverSelChanged(GtkComboBox * widget, DS1k_Controller * controller) {
+    if(controller->ControlsMuted())
+        return;
+    
+    const gchar * selection = gtk_combo_box_get_active_id(GTK_COMBO_BOX(widget));
+    controller->device->tmcDevice->CmdF(":ACQ:AVER %s", selection);
+}
+
 
 DS1k_Controller::DS1k_Controller(ScopeModel * m, const std::string & sn):
     model(m),
+    controlsMuted(0),
     name(sn),
     sernum(sn)
 {
+    // Don't talk to device while GUI is being configured
+    MuteControls();
+    
     tabLbl = gtk_label_new(sernum.c_str());
     layoutGrid = gtk_grid_new();
     
@@ -613,13 +693,13 @@ DS1k_Controller::DS1k_Controller(ScopeModel * m, const std::string & sn):
         "PEAKDETECT", "Peak Detect",
         NULL
     );
-    // g_signal_connect(acqTypeSel, "changed", G_CALLBACK(Sig_AcqTypeSelChanged), this);
+    g_signal_connect(acqTypeSel, "changed", G_CALLBACK(Sig_AcqTypeSelChanged), this);
     acqModeSel = ComboBoxText("RTIM",
         "RTIM", "Realtime",
         "ETIM", "Equal Time",
         NULL
     );
-    // g_signal_connect(acqModeSel, "changed", G_CALLBACK(Sig_AcqModeSelChanged), this);
+    g_signal_connect(acqModeSel, "changed", G_CALLBACK(Sig_AcqModeSelChanged), this);
     acqAverSel = ComboBoxText("8",
         "2", "2",
         "4", "4",
@@ -631,12 +711,11 @@ DS1k_Controller::DS1k_Controller(ScopeModel * m, const std::string & sn):
         "256", "256",
         NULL
     );
-    // g_signal_connect(acqModeSel, "changed", G_CALLBACK(Sig_AcqAverSelChanged), this);
+    g_signal_connect(acqModeSel, "changed", G_CALLBACK(Sig_AcqAverSelChanged), this);
     
-    GtkWidget * acqFrame = gtk_frame_new("Timebase");
+    GtkWidget * acqFrame = gtk_frame_new("Acquire");
     GtkWidget * acqGrid = gtk_grid_new();
     gtk_container_add(GTK_CONTAINER(acqFrame), acqGrid);
-    // ":ACQ:AVER?" returns: 2, 4, 8, 16, 32, 64, 128, 256
     
     
     gtk_grid_attach(GTK_GRID(acqGrid), gtk_label_new("Type:"), 0, 0, 1, 1);
@@ -648,8 +727,8 @@ DS1k_Controller::DS1k_Controller(ScopeModel * m, const std::string & sn):
     
     
     
-    chan[0] = new ScopeChanCtlPane(this, "Channel 1", 1);
-    chan[1] = new ScopeChanCtlPane(this, "Channel 2", 2);
+    chan[0] = new ScopeChanCtlPane(this, "Channel 1", 0);
+    chan[1] = new ScopeChanCtlPane(this, "Channel 2", 1);
     trigCtl = new DS1k_TriggerCtlPane(this);
     
     GtkWidget * chTrigGrid = gtk_grid_new();
@@ -672,14 +751,14 @@ DS1k_Controller::DS1k_Controller(ScopeModel * m, const std::string & sn):
     std::map<std::string, std::string> params;
     GetParams(device->tmcDevice, params);
     SetParams(params);
+    UnmuteControls();
 }
 
 // TODO: ACQ, trigger controls
 void DS1k_Controller::SetParams(std::map<std::string, std::string> & params)
 {
-    // Hold device while GUI is being configured
-    Device * tmpDevice = device;
-    device = NULL;
+    // Don't talk to device while GUI is being configured
+    MuteControls();
     
     // ":ACQ:TYPE?" returns: NORMAL AVERAGE PEAKDETECT, to set: NORM AVER PEAK
     // ":ACQ:MODE?" returns: REAL_TIME EQUAL_TIME, to set: RTIM ETIM
@@ -816,7 +895,7 @@ void DS1k_Controller::SetParams(std::map<std::string, std::string> & params)
     
     gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(keyLockChk), (params[":KEY:LOCK?"] == "ENABLE"));
     
-    device = tmpDevice;
+    UnmuteControls();
 }
 
 //******************************************************************************

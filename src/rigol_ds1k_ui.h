@@ -128,6 +128,10 @@ struct ScopeChanCtlPane {
     SI_SpinButton * scaleSISB;
     
     ScopeChanCtlPane(DS1k_Controller * scp, const char * name, int chan);
+    
+    // void MuteControls() {controller->MuteControls();}
+    // void UnmuteControls() {controller->UnmuteControls();}
+    // bool ControlsMuted() {return controller->ControlsMuted();}
 };
 
 
@@ -164,11 +168,16 @@ struct DS1k_TriggerCtlPane {
     // void PatternTriggerOpts();
     // void DurationTriggerOpts();
     void AlternationTriggerOpts();
+    
+    // void MuteControls() {controller->MuteControls();}
+    // void UnmuteControls() {controller->UnmuteControls();}
+    // bool ControlsMuted() {return controller->ControlsMuted();}
 };
 
 struct DS1k_Controller {
     ScopeModel * model;
     Device * device;
+    int controlsMuted;
     
     std::string name;
     std::string sernum;
@@ -191,6 +200,12 @@ struct DS1k_Controller {
     DS1k_Controller(ScopeModel * m, const std::string & sn);
     
     void SetParams(std::map<std::string, std::string> & params);
+    
+    // Enable/disable control of device
+    // (used to suppress spurious commands when syncing the UI)
+    void MuteControls() {++controlsMuted;}
+    void UnmuteControls() {--controlsMuted;}
+    bool ControlsMuted() {return controlsMuted > 0;}
 };
 
 //******************************************************************************
