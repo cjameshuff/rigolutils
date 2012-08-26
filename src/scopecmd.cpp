@@ -166,6 +166,11 @@ void ScopeRead(size_t size)
     }
 }
 
+void ExitCleanup()
+{
+    libusb_exit(NULL);
+}
+
 int main(int argc, char ** argv)
 {
     if(argc < 2)
@@ -196,6 +201,13 @@ int main(int argc, char ** argv)
         
         return EXIT_FAILURE;
     }
+    
+    int r = libusb_init(NULL);
+    if(r < 0) {
+        cerr << "libusb_init() failed" << endl;
+        return EXIT_FAILURE;
+    }
+    atexit(ExitCleanup);
     
     for(int j = 0; j < (sizeof(commands)/sizeof(Command)); ++j)
         commandMap[commands[j].shortCmd] = commands[j];
@@ -239,7 +251,6 @@ int main(int argc, char ** argv)
             cerr << "Looking for device: " << serialNum << endl;
     }
     
-    int r;
     try {
         // Check commands
         r = DoCommands(argc, argv);
