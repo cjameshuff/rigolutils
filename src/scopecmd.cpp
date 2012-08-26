@@ -49,6 +49,7 @@ struct Command {
 
 void WRITE(int & argc, char *** argv, Command & cmd);
 void READ(int & argc, char *** argv, Command & cmd);
+void QUERY(int & argc, char *** argv, Command & cmd);
 void ECHO(int & argc, char *** argv, Command & cmd);
 void NEWLINE(int & argc, char *** argv, Command & cmd);
 void ACQ_AVER(int & argc, char *** argv, Command & cmd);
@@ -134,6 +135,7 @@ Command commands[] = {
     {"get-scope-params", "", 0, GET_SCOPE_PARAMS, "Get scope parameters in human readable, easily parsable format"},
     {"w", "<VARIES>", 0, WRITE, "Write raw command to scope"},
     {"r", "<NONE>", 0, READ, "Read raw data from scope"},
+    {"q", "<NONE>", 0, QUERY, "Send command and read short response"},
     {"echo", "<NONE>", 0, ECHO, "Echo string to output (no effect on scope)"},
     {"nl", "<NONE>", 0, NEWLINE, "Write newline to output (no effect on scope)"}
 };
@@ -356,6 +358,23 @@ void READ(int & argc, char *** argv, Command & cmd)
     else
     {
         throw FormattedError("r requires a parameter!");
+    }
+}
+
+void QUERY(int & argc, char *** argv, Command & cmd)
+{
+    --argc;
+    ++(*argv);
+    if(argc)
+    {
+        ScopeWrite(**argv);
+        ScopeRead(256);
+        --argc;
+        ++(*argv);
+    }
+    else
+    {
+        throw FormattedError("w requires a parameter!");
     }
 }
 
