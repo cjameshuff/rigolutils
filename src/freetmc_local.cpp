@@ -87,7 +87,7 @@ TMC_Descriptor * OpenTMC_LocalDevice(libusb_device * dev, libusb_device_handle *
     // desc->isRigol = false;
     desc->isRigol = (devdesc.idVendor == 0x1AB1);
     
-    fprintf(stderr, "libusb_get_config_descriptor:\n");
+    // fprintf(stderr, "libusb_get_config_descriptor:\n");
     struct libusb_config_descriptor * cfg;
     libusb_get_config_descriptor(dev, 0, &cfg);
     
@@ -99,27 +99,27 @@ TMC_Descriptor * OpenTMC_LocalDevice(libusb_device * dev, libusb_device_handle *
     desc->maxPacketSizeOUT = epOUT->wMaxPacketSize;
     desc->maxPacketSizeIN = epIN->wMaxPacketSize;
     
-    fprintf(stderr, "libusb_set_configuration:\n");
+    // fprintf(stderr, "libusb_set_configuration:\n");
     r = libusb_set_configuration(desc->hand, 1);
     if(r < 0)
         throw FormattedError("libusb_set_configuration() failed (%d)", r);
     
-    fprintf(stderr, "libusb_claim_interface:\n");
+    // fprintf(stderr, "libusb_claim_interface:\n");
     r = libusb_claim_interface(desc->hand, 0);
     if(r < 0)
         throw FormattedError("libusb_claim_interface() failed (%d)", r);
     
-    fprintf(stderr, "libusb_clear_halt IN:\n");
+    // fprintf(stderr, "libusb_clear_halt IN:\n");
     r = libusb_clear_halt(desc->hand, BULK_ENDPOINT_IN);
     if(r < 0)
         throw FormattedError("libusb_clear_halt() failed on IN bulk endpoint (%d)", r);
     
-    fprintf(stderr, "libusb_clear_halt OUT:\n");
+    // fprintf(stderr, "libusb_clear_halt OUT:\n");
     r = libusb_clear_halt(desc->hand, BULK_ENDPOINT_OUT);
     if(r < 0)
         throw FormattedError("libusb_clear_halt() failed on OUT bulk endpoint (%d)", r);
     
-    fprintf(stderr, "Device opened and initialized\n");
+    // fprintf(stderr, "Device opened and initialized\n");
     return desc;
 }
 
@@ -170,7 +170,7 @@ TMC_LocalDevice::TMC_LocalDevice(uint16_t vendID, uint16_t prodID, const std::st
 {
     int r;
     
-    printf("searching for matching device\n");
+    // printf("searching for matching device\n");
     
     libusb_device ** devs;
     ssize_t cnt = libusb_get_device_list(NULL, &devs);
@@ -181,7 +181,7 @@ TMC_LocalDevice::TMC_LocalDevice(uint16_t vendID, uint16_t prodID, const std::st
     for(libusb_device ** dev = devs; *dev != NULL && !desc; dev++)
     {
         libusb_device_handle * hand;
-        fprintf(stderr, "libusb_open:\n");
+        // fprintf(stderr, "libusb_open:\n");
         r = libusb_open(*dev, &hand);
         if(r < 0) {
             fprintf(stderr, "couldn't open device\n");
@@ -193,23 +193,23 @@ TMC_LocalDevice::TMC_LocalDevice(uint16_t vendID, uint16_t prodID, const std::st
         if(r < 0)
             throw FormattedError("failed to get device descriptor");
         
-        fprintf(stderr, "%04x:%04x (bus %d, device %d)\n", devdesc.idVendor, devdesc.idProduct,
-            libusb_get_bus_number(*dev), libusb_get_device_address(*dev));
+        // fprintf(stderr, "%04x:%04x (bus %d, device %d)\n", devdesc.idVendor, devdesc.idProduct,
+        //     libusb_get_bus_number(*dev), libusb_get_device_address(*dev));
         
         if(devdesc.idVendor == vendID && devdesc.idProduct == prodID)
         {
-            fprintf(stderr, "Found VID/PID match\n");
+            // fprintf(stderr, "Found VID/PID match\n");
             char foundSernum[1024] = {'\0'};
             if(devdesc.iSerialNumber)
                 libusb_get_string_descriptor_ascii(hand, devdesc.iSerialNumber, (uint8_t*)foundSernum, sizeof(foundSernum));
             
-            fprintf(stderr, "Device serial number: %s\n", foundSernum);
+            // fprintf(stderr, "Device serial number: %s\n", foundSernum);
             // Vendor and product ID match, check serial number or take first found if no serial number specified
             if(sernum == "" || sernum == foundSernum)
             {
                 desc = OpenTMC_LocalDevice(*dev, hand, devdesc);
                 hand = NULL;// desc has ownership of handle now
-                fprintf(stderr, "Device %s opened\n", foundSernum);
+                // fprintf(stderr, "Device %s opened\n", foundSernum);
             }
         } // if(vid and pid match)
         
@@ -232,7 +232,7 @@ TMC_LocalDevice::~TMC_LocalDevice()
 
 size_t TMC_LocalDevice::Write(const uint8_t * msg, size_t len)
 {
-    cerr << "USB: " << string((char *)msg, len) << endl;
+    // cerr << "USB: " << string((char *)msg, len) << endl;
     // TODO: multi-transfer writes
     int r;
     // "The total number of bytes in each Bulk-OUT transaction must be a multiple of 4.The Host must add 0
